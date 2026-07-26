@@ -1,5 +1,5 @@
 import type { UserProfile, LifeEvent } from '@/types';
-import { userService, eventService, db } from './storageService';
+import { userService, eventService, db, normalizeEvent } from './storageService';
 import { toPng, toJpeg } from 'html-to-image';
 
 // ============ 导出数据结构 ============
@@ -10,7 +10,7 @@ export interface ExportData {
   events: LifeEvent[];        // 所有事件
 }
 
-const EXPORT_VERSION = '1.0';
+const EXPORT_VERSION = '2.0';
 
 // ============ 导出 ============
 
@@ -107,8 +107,8 @@ export async function importUserData(
         await eventService.deleteEventsByUser(data.user.id);
       }
 
-      // 批量写入新事件
-      await db.events.bulkPut(data.events);
+      // 批量写入新事件。v1.0 导出不含 v0.4.0 字段，也要套用同一默认值。
+      await db.events.bulkPut(data.events.map(normalizeEvent));
     }
 
     return {

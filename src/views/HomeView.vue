@@ -4,12 +4,14 @@ import { useRouter } from 'vue-router'
 import ProfileEditor from '@/components/Profile/ProfileEditor.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import { useUserStore } from '@/stores/userStore'
+import { useUiStore } from '@/stores/uiStore'
 import { useEventStore } from '@/stores/eventStore'
 import { formatChineseDate, relativeTime } from '@/utils/dateUtils'
 import { getCategory } from '@/utils/constants'
 import type { UserProfile } from '@/types'
 
 const userStore = useUserStore()
+const uiStore = useUiStore()
 const eventStore = useEventStore()
 const router = useRouter()
 
@@ -26,6 +28,10 @@ function onProfileCreated(_user: UserProfile) {
 
 function goTimeline() {
   router.push('/timeline')
+}
+
+function addEvent() {
+  uiStore.openEventForm()
 }
 </script>
 
@@ -90,9 +96,10 @@ function goTimeline() {
 
       <div v-if="eventStore.totalCount === 0" class="text-center py-8">
         <div class="text-4xl mb-2">🌱</div>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          还没有记录任何事件，去添加第一个吧。
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          还没有记录任何事件，从第一个人生节点开始吧。
         </p>
+        <AppButton size="sm" @click="addEvent">＋ 添加第一个事件</AppButton>
       </div>
 
       <ul v-else class="space-y-3">
@@ -123,8 +130,9 @@ function goTimeline() {
 
     <!-- 快速入口 -->
     <div class="flex flex-wrap gap-3">
-      <AppButton @click="goTimeline">📖 查看时间线</AppButton>
-      <AppButton variant="secondary" @click="router.push('/stats')">📊 人生统计</AppButton>
+      <AppButton @click="addEvent">＋ 添加事件</AppButton>
+      <AppButton variant="secondary" @click="goTimeline">📖 查看时间线</AppButton>
+      <AppButton variant="ghost" @click="router.push('/stats')">📊 人生统计</AppButton>
       <AppButton variant="ghost" @click="router.push('/profile')">👤 个人档案</AppButton>
       <AppButton variant="ghost" @click="router.push('/settings')">⚙️ 设置</AppButton>
     </div>

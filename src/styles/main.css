@@ -1,3 +1,6 @@
+/* 第三方日期选择器基础样式（随后用设计系统的品牌色覆盖）；@import 必须位于文件最前 */
+@import '@vuepic/vue-datepicker/dist/main.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -56,6 +59,75 @@
   .card-base {
     @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow;
   }
+}
+
+/* ============ 日期选择器主题（对齐设计系统的温暖品牌色） ============ */
+.dp__theme_light {
+  --dp-primary-color: #d4a574;
+  --dp-primary-text-color: #ffffff;
+  --dp-text-color: #2c2c2c;
+  --dp-secondary-color: #9b9b9b;
+  --dp-border-color: #d1d5db;
+  --dp-border-color-hover: #d4a574;
+  --dp-hover-color: #f8f2ea;
+  --dp-hover-text-color: #2c2c2c;
+  --dp-icon-color: #9b9b9b;
+  --dp-border-radius: 8px;
+  --dp-font-family: inherit;
+}
+
+.dp__theme_dark {
+  --dp-background-color: #2d2b2a;
+  --dp-primary-color: #e6c9ab;
+  --dp-primary-text-color: #1a1918;
+  --dp-text-color: #f5f1ed;
+  --dp-secondary-color: #b8b3ad;
+  --dp-border-color: #4b5563;
+  --dp-border-color-hover: #e6c9ab;
+  --dp-hover-color: #3a3735;
+  --dp-hover-text-color: #f5f1ed;
+  --dp-icon-color: #b8b3ad;
+  --dp-border-radius: 8px;
+  --dp-font-family: inherit;
+}
+
+/* 日期输入框与项目内 .input-base 视觉保持一致 */
+.lp-datepicker-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  color: #2c2c2c;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* 内置图标已隐藏，回收其占位的左内边距，避免 placeholder 被顶开 */
+.lp-datepicker-input.dp__input_icon_pad {
+  padding-left: 0.75rem;
+}
+
+.dark .lp-datepicker-input {
+  background-color: #1f2937;
+  border-color: #4b5563;
+  color: #f3f4f6;
+}
+
+.lp-datepicker-input:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px #d4a574;
+}
+
+.lp-datepicker-input--invalid {
+  border-color: #f87171;
+  box-shadow: 0 0 0 1px #f87171;
+}
+
+/* 弹层需浮于模态框（z-50）之上 */
+.dp__outer_menu_wrap,
+.dp--menu-wrapper {
+  z-index: 60;
 }
 
 /* Custom utilities */
