@@ -14,10 +14,112 @@ const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent];
 
 interface TimelineItem {
   event: LifeEvent
-  year: number
-  isNewYear: boolean
   globalIndex: number
 }
+
+interface YearGroup {
+  year: number
+  items: TimelineItem[]
+}
+
+// 最新在上，按年份分组；globalIndex 跨年份连续，保证桌面端左右交替不因分组断裂。
+const yearGroups = computed<YearGroup[]>(() => {
+  const sorted = [...eventStore.filteredSortedEvents].reverse()
+  const groups: YearGroup[] = []
+  let idx = 0
+  for (const event of sorted) {
+    const year = new Date(event.date).getFullYear()
+    const last = groups[groups.length - 1]
+    if (!last || last.year !== year) groups.push({ year, items: [] })
+    groups[groups.length - 1].items.push({ event, globalIndex: idx })
+    idx++
+  }
+  return groups
+})
+
+// 分组后的扁平视图（区间色带布局与全局索引仍基于它）。
+const flatItems = computed<TimelineItem[]>(() =>
+  yearGroups.value.flatMap(group => group.items)
+)
+
+const isEmpty = computed(() => eventStore.totalCount === 0)
+const noFilterResult = computed(() => !isEmpty.value && eventStore.filteredCount === 0)
+const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
+
+// ============ 年份导航尺 + 吸顶年份 ============
+// 吸顶偏移 = 页头高度 + 间隙：页头含移动端副导航时高度会变，动态测量。
+const activeYear = ref<number | null>(null)
+const stickyTop = ref(72)
+const yearNav = ref<HTMLElement | null>(null)
+const groupElements = new Map<number, HTMLElement>()
+
+function setGroupRef(year: number, element: unknown) {
+  if (element instanceof HTMLElement) groupElements.set(year, element)
+  else groupElements.delete(year)
+}
+
+function measureStickyTop() {
+  const header = document.querySelector('header')
+  stickyTop.value = (header?.offsetHeight ?? 64) + 8
+}
+
+function syncActiveYear() {
+  if (yearGroups.value.length === 0) {
+    activeYear.value = null
+    return
+  }
+  // 判定线略低于吸顶条：某年标题一旦被推过该线，上一年即交出「当前年份」。
+  const line = stickyTop.value + 16
+  let current: number | null = null
+  for (const group of yearGroups.value) {
+    const element = groupElements.get(group.year)
+    if (!element) continue
+    if (element.getBoundingClientRect().top <= line) current = group.year
+    else break
+  }
+  // 最后一年的分组较短时可能始终压不到判定线，滚到底时直接点亮它。
+  if (
+    current === null &&
+    window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+  ) {
+    current = yearGroups.value[yearGroups.value.length - 1].year
+  }
+  activeYear.value = current ?? yearGroups.value[0].year
+}
+
+let scrollFrame: number | null = null
+function onScroll() {
+  if (scrollFrame !== null) return
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = null
+    syncActiveYear()
+  })
+}
+
+function scrollToYear(year: number) {
+  const element = groupElements.get(year)
+  element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// 当前年份变化时，把导航尺上对应的 chips 滚到可见位置（只横滚，不带动页面）。
+watch(activeYear, year => {
+  if (year === null) return
+  void nextTick(() => {
+    const strip = yearNav.value
+    const chip = strip?.querySelector<HTMLElement>(`[data-year="${year}"]`)
+    if (!strip || !chip) return
+    const target = chip.offsetLeft - strip.clientWidth / 2 + chip.clientWidth / 2
+    strip.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+  })
+})
+
+// ============ 区间色带布局 ============
+// 卡片高度不固定，色带位置必须以实际节点坐标计算；通过插值使跨年区间连续贯穿年份分组。
+const timelineRoot = ref<HTMLElement | null>(null)
+const itemElements = new Map<string, HTMLElement>()
+const periodBands = ref<PeriodBand[]>([])
+let layoutFrame: number | null = null
+let resizeObserver: ResizeObserver | null = null
 
 interface PeriodBand {
   id: string
@@ -27,33 +129,6 @@ interface PeriodBand {
   color: string
   ongoing: boolean
 }
-
-// 最新在上，按年份分组并打上全局索引；基于筛选后的事件。
-const flatItems = computed<TimelineItem[]>(() => {
-  const sorted = [...eventStore.filteredSortedEvents].reverse()
-  const items: TimelineItem[] = []
-  const seenYears = new Set<number>()
-  let idx = 0
-  for (const event of sorted) {
-    const year = new Date(event.date).getFullYear()
-    items.push({ event, year, isNewYear: !seenYears.has(year), globalIndex: idx })
-    seenYears.add(year)
-    idx++
-  }
-  return items
-})
-
-const isEmpty = computed(() => eventStore.totalCount === 0)
-const noFilterResult = computed(() => !isEmpty.value && eventStore.filteredCount === 0)
-const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
-
-// ============ 区间色带布局 ============
-// 卡片高度不固定，色带位置必须以实际节点坐标计算；通过插值使跨年区间连续贯穿年份分组。
-const timelineRoot = ref<HTMLElement | null>(null)
-const itemElements = new Map<string, HTMLElement>()
-const periodBands = ref<PeriodBand[]>([])
-let layoutFrame: number | null = null
-let resizeObserver: ResizeObserver | null = null
 
 function setItemRef(eventId: string, element: unknown) {
   if (element instanceof HTMLElement) itemElements.set(eventId, element)
@@ -166,20 +241,33 @@ function nodeStyle(event: LifeEvent) {
 }
 
 onMounted(() => {
+  measureStickyTop()
+  syncActiveYear()
   schedulePeriodLayout()
   if (timelineRoot.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(schedulePeriodLayout)
     resizeObserver.observe(timelineRoot.value)
   }
-  window.addEventListener('resize', schedulePeriodLayout)
+  window.addEventListener('resize', onResize)
+  window.addEventListener('scroll', onScroll, { passive: true })
 })
 
+function onResize() {
+  measureStickyTop()
+  syncActiveYear()
+  schedulePeriodLayout()
+}
+
 watch(flatItems, schedulePeriodLayout, { flush: 'post' })
+// 筛选/增删导致分组变化后，按当前滚动位置重新点亮年份。
+watch(yearGroups, () => syncActiveYear(), { flush: 'post' })
 
 onBeforeUnmount(() => {
   if (layoutFrame !== null) cancelAnimationFrame(layoutFrame)
+  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame)
   resizeObserver?.disconnect()
-  window.removeEventListener('resize', schedulePeriodLayout)
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('scroll', onScroll)
 })
 </script>
 
@@ -211,7 +299,29 @@ onBeforeUnmount(() => {
     </AppButton>
   </div>
 
-  <div v-else ref="timelineRoot" class="timeline-container relative py-8 px-4 sm:px-6">
+  <div v-else ref="timelineRoot" class="timeline-container relative py-8 px-4 sm:px-6" :style="{ '--sticky-top': `${stickyTop}px` }">
+    <!-- 年份导航尺：点击直达该年，滚动时联动高亮 -->
+    <nav
+      v-if="yearGroups.length > 1"
+      ref="yearNav"
+      class="timeline-year-nav"
+      aria-label="年份快速跳转"
+    >
+      <button
+        v-for="group in yearGroups"
+        :key="group.year"
+        type="button"
+        class="timeline-year-chip"
+        :class="{ 'timeline-year-chip--active': group.year === activeYear }"
+        :data-year="group.year"
+        :title="`${group.year} 年 · ${group.items.length} 个事件`"
+        :aria-current="group.year === activeYear ? 'true' : undefined"
+        @click="scrollToYear(group.year)"
+      >
+        {{ group.year }}<span class="timeline-year-chip-count">{{ group.items.length }}</span>
+      </button>
+    </nav>
+
     <!-- 区间色带图层：在中心轴后方连续渲染，不受年份标题切割 -->
     <div class="timeline-period-layer" aria-hidden="true">
       <div
@@ -244,44 +354,116 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 扁平化事件列表（年份标题随事件内联渲染，保证全局交替连续） -->
+    <!-- 按年份分组的事件列表：年份标题吸顶，左右交替基于全局索引跨年份连续 -->
     <div
-      v-for="item in flatItems"
-      :key="item.event.id"
-      class="timeline-item"
-      :class="{
-        'timeline-item--left': item.globalIndex % 2 === 1,
-        'timeline-item--period': item.event.type === 'period',
-      }"
-      :style="{ '--item-index': item.globalIndex }"
-      :ref="(element) => setItemRef(item.event.id, element)"
+      v-for="group in yearGroups"
+      :key="group.year"
+      class="timeline-year-group"
+      :ref="(element) => setGroupRef(group.year, element)"
     >
-      <!-- 年份标题（仅在新年的第一项前显示） -->
-      <div v-if="item.isNewYear" class="timeline-year-title">
-        <span>{{ item.year }}</span>
+      <div class="timeline-year-title">
+        <span>{{ group.year }}</span>
       </div>
 
-      <!-- 节点：重要程度决定尺寸，分类决定颜色；区间节点用空心环以区别时间点 -->
       <div
-        class="timeline-node"
+        v-for="item in group.items"
+        :key="item.event.id"
+        class="timeline-item"
         :class="{
-          'timeline-node--period': item.event.type === 'period',
-          'timeline-node--milestone': item.event.importance >= 5,
+          'timeline-item--left': item.globalIndex % 2 === 1,
+          'timeline-item--period': item.event.type === 'period',
         }"
-        :style="nodeStyle(item.event)"
-        :title="`${item.event.title}（${item.event.type === 'period' ? '时间区间' : '时间点'}）`"
-        data-timeline-node
-      ></div>
+        :style="{ '--item-index': item.globalIndex }"
+        :ref="(element) => setItemRef(item.event.id, element)"
+      >
+        <!-- 节点：重要程度决定尺寸，分类决定颜色；区间节点用空心环以区别时间点 -->
+        <div
+          class="timeline-node"
+          :class="{
+            'timeline-node--period': item.event.type === 'period',
+            'timeline-node--milestone': item.event.importance >= 5,
+          }"
+          :style="nodeStyle(item.event)"
+          :title="`${item.event.title}（${item.event.type === 'period' ? '时间区间' : '时间点'}）`"
+          data-timeline-node
+        ></div>
 
-      <!-- 卡片 -->
-      <div class="timeline-card-wrapper">
-        <EventCard :event="item.event" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
+        <!-- 卡片 -->
+        <div class="timeline-card-wrapper">
+          <EventCard :event="item.event" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 年份导航尺：横向可滚动的年份 chips */
+.timeline-year-nav {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  margin-bottom: 12px;
+  scrollbar-width: thin;
+}
+
+.timeline-year-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #4B5563; /* gray-600 */
+  background-color: rgba(255, 255, 255, 0.85);
+  border: 1px solid #E5E7EB; /* gray-200 */
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.timeline-year-chip:hover {
+  color: #9A6B3F;
+  border-color: #D4A574;
+  transform: translateY(-1px);
+}
+
+.timeline-year-chip--active {
+  color: white;
+  background-color: #D4A574;
+  border-color: #D4A574;
+  box-shadow: 0 2px 6px rgba(212, 165, 116, 0.4);
+}
+
+.timeline-year-chip-count {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.65;
+}
+
+.dark .timeline-year-chip {
+  color: #D1D5DB; /* gray-300 */
+  background-color: rgba(31, 41, 55, 0.85); /* gray-800 */
+  border-color: #4B5563; /* gray-600 */
+}
+
+.dark .timeline-year-chip--active {
+  color: white;
+  background-color: #B98A5C;
+  border-color: #B98A5C;
+}
+
+/* 年份分组：滚动跳转的落点，预留吸顶标题以下的位置 */
+.timeline-year-group {
+  scroll-margin-top: calc(var(--sticky-top, 72px) + 4px);
+}
+
 /* 区间色带位于主轴之后。实际坐标由节点测量并插值得到，因此可跨越年份标题连续延伸。 */
 .timeline-period-layer {
   position: absolute;
@@ -458,7 +640,8 @@ onBeforeUnmount(() => {
     padding-right: 0;
     width: auto;
     animation: slideInRight 0.4s ease-out both;
-    animation-delay: calc(var(--item-index, 0) * 0.05s);
+    /* 入场错峰封顶 0.6s：500 条事件时最后一张不必等 25 秒才出现 */
+    animation-delay: min(calc(var(--item-index, 0) * 0.05s), 0.6s);
   }
 
   /* 全局奇数项（globalIndex 为奇数）：卡片在左，保证跨年份连续交替 */
@@ -469,19 +652,24 @@ onBeforeUnmount(() => {
     text-align: right;
     animation-name: slideInLeft;
   }
-
-  /* 年份标题横跨整行 */
-  .timeline-year-title {
-    grid-column: 1 / -1;
-  }
 }
 
-/* 年份标题 */
+/* 吸顶年份标题：滚过该年时保持可见，卡片从柔光横带下方穿过 */
 .timeline-year-title {
-  position: relative;
+  position: sticky;
+  top: var(--sticky-top, 72px);
+  z-index: 5;
   display: flex;
   justify-content: center;
-  margin: 40px 0 24px;
+  padding: 6px 0 10px;
+  margin: 36px 0 20px;
+  background: linear-gradient(to bottom, rgba(249, 250, 251, 0.96) 62%, rgba(249, 250, 251, 0));
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.dark .timeline-year-title {
+  background: linear-gradient(to bottom, rgba(17, 24, 39, 0.96) 62%, rgba(17, 24, 39, 0));
 }
 
 .timeline-year-title span {
@@ -496,9 +684,9 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 6px rgba(212, 165, 116, 0.3);
 }
 
-/* 第一项（含新年份标题）不需要顶部 margin */
-.timeline-item:first-child .timeline-year-title {
-  margin-top: 0;
+/* 第一年（紧随出生起点）不需要大间距 */
+.timeline-year-group:first-of-type .timeline-year-title {
+  margin-top: 4px;
 }
 
 @keyframes slideInRight {
@@ -516,5 +704,15 @@ onBeforeUnmount(() => {
 }
 :global(.dark) .timeline-node--milestone {
   box-shadow: 0 0 0 3px rgba(26, 25, 24, 0.95), 0 0 14px var(--node-glow);
+}
+
+/* 用户偏好减少动效：关闭入场动画与 chips 悬浮位移 */
+@media (prefers-reduced-motion: reduce) {
+  .timeline-card-wrapper {
+    animation: none;
+  }
+  .timeline-year-chip:hover {
+    transform: none;
+  }
 }
 </style>

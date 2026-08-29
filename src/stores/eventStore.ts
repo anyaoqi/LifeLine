@@ -11,6 +11,10 @@ export const useEventStore = defineStore('event', () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
+  // ============ 删除撤销（单槽） ============
+  // 最近一次被删除的事件；UI 层在 UNDO_DELETE_WINDOW_MS 内提供「撤销」入口。
+  const recentlyDeleted = ref<LifeEvent | null>(null);
+
   // ============ 筛选状态（仅作用于时间线展示） ============
   const searchKeyword = ref('');
   const activeCategories = ref<Set<EventCategory>>(new Set());
@@ -190,14 +194,16 @@ export const useEventStore = defineStore('event', () => {
     }
   }
 
-  // 删除事件
+  // 删除事件（保留副本供 30 秒内撤销；再删一条会顶掉上一条，撤销槽只有一个）
   async function deleteEvent(id: string): Promise<void> {
     loading.value = true;
     error.value = null;
     try {
+      const target = events.value.find(e => e.id === id);
       await eventService.deleteEvent(id);
       mutationSeq++;
       events.value = events.value.filter(e => e.id !== id);
+      if (target) recentlyDeleted.value = { ...target };
     } catch (err) {
       error.value = err instanceof Error ? err.message : '删除事件失败';
       throw err;
@@ -206,11 +212,37 @@ export const useEventStore = defineStore('event', () => {
     }
   }
 
+  // 撤销最近一次删除：把事件原样写回（保留原 id 与创建时间）
+  async function undoDelete(): Promise<boolean> {
+    const deleted = recentlyDeleted.value;
+    if (!deleted) return false;
+    recentlyDeleted.value = null;
+    loading.value = true;
+    error.value = null;
+    try {
+      await eventService.addEvent(deleted);
+      mutationSeq++;
+      events.value.push(deleted);
+      return true;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '恢复事件失败';
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // 主动放弃撤销（窗口到期或用户关闭提示）
+  function dismissRecentlyDeleted() {
+    recentlyDeleted.value = null;
+  }
+
   // 清空（用户切换时）
   function reset() {
     events.value = [];
     error.value = null;
     loading.value = false;
+    recentlyDeleted.value = null;
   }
 
   return {
@@ -222,6 +254,7 @@ export const useEventStore = defineStore('event', () => {
     activeCategories,
     activeTypes,
     onlyBigEvents,
+    recentlyDeleted,
     // Computed - 全量
     sortedEvents,
     recentEvents,
@@ -238,6 +271,8 @@ export const useEventStore = defineStore('event', () => {
     createEvent,
     updateEvent,
     deleteEvent,
+    undoDelete,
+    dismissRecentlyDeleted,
     setKeyword,
     toggleCategory,
     toggleType,

@@ -37,7 +37,8 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  // BASE_URL 由 Vite 注入，构建时等于 vite.config.ts 的 base（GitHub Pages 子路径）
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     return savedPosition ?? { top: 0 }
