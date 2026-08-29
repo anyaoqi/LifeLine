@@ -128,3 +128,6 @@ export const NODE_SIZE_BY_IMPORTANCE: Record<Importance, number> = {
 
 /** 区间色带最小渲染长度（px）：保证几天的短区间也看得见 */
 export const MIN_BAND_HEIGHT = 24;
+
+/** 删除事件的撤销窗口（毫秒）：误删后这段时间内可一键恢复 */
+export const UNDO_DELETE_WINDOW_MS = 30_000;

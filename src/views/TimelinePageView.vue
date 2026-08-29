@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import TimelineView from '@/components/Timeline/TimelineView.vue'
 import TimelineFilter from '@/components/Timeline/TimelineFilter.vue'
+import DeleteUndoToast from '@/components/Timeline/DeleteUndoToast.vue'
 import EventForm from '@/components/EventForm/EventForm.vue'
 import EventDeleteConfirm from '@/components/EventForm/EventDeleteConfirm.vue'
 import AppModal from '@/components/common/AppModal.vue'
@@ -10,6 +11,7 @@ import { useEventStore } from '@/stores/eventStore'
 import { useUserStore } from '@/stores/userStore'
 import { useUiStore } from '@/stores/uiStore'
 import { exportNodeToImage, buildExportFilename } from '@/services/exportService'
+import { UNDO_DELETE_WINDOW_MS } from '@/utils/constants'
 import type { LifeEvent } from '@/types'
 
 const eventStore = useEventStore()
@@ -63,6 +65,15 @@ async function confirmDelete() {
   }
   deleteOpen.value = false
   deletingEvent.value = null
+}
+
+// 撤销最近一次删除：store 恢复数据后 recentlyDeleted 置空，提示自动消失
+async function onUndoDelete() {
+  try {
+    await eventStore.undoDelete()
+  } catch {
+    // 失败信息已记录在 store.error，由现有错误展示路径处理
+  }
 }
 
 async function handleExport() {
@@ -162,6 +173,15 @@ async function handleExport() {
         </template>
       </EventForm>
     </AppModal>
+
+    <!-- 删除撤销提示（30 秒窗口） -->
+    <DeleteUndoToast
+      v-if="eventStore.recentlyDeleted"
+      :title="eventStore.recentlyDeleted.title"
+      :window-ms="UNDO_DELETE_WINDOW_MS"
+      @undo="onUndoDelete"
+      @dismiss="eventStore.dismissRecentlyDeleted()"
+    />
 
     <!-- 删除确认 -->
     <AppModal v-model="deleteOpen" title="删除事件" max-width="max-w-md">
