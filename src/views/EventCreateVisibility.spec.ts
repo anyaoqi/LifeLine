@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import 'fake-indexeddb/auto'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -162,7 +162,13 @@ describe('新增事件后立即可见', () => {
     await flush(12)
 
     expect(eventStore.totalCount).toBe(1)
-    expect(router.currentRoute.value.path).toBe('/timeline')
-    expect(document.body.textContent).toContain('上大学')
+    // App.vue 保存后会等 50ms 弹窗关闭动画再跳转（宏任务），flushPromises 只清微任务，
+    // 慢机器上断言时导航尚未完成 —— 轮询等待路由就绪，不假设时序。
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/timeline')
+    })
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('上大学')
+    })
   })
 })
