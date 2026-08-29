@@ -88,6 +88,27 @@ function isActive(to: string): boolean {
 
         <!-- 右侧操作 -->
         <div class="flex items-center gap-2">
+          <!-- 全局添加入口：无论当前在哪个已建档页面，都可直接进入事件表单 -->
+          <button
+            v-if="userStore.isLoggedIn"
+            type="button"
+            class="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-primary-400 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-500"
+            title="添加事件"
+            @click="uiStore.openEventForm()"
+          >
+            <span class="text-base leading-none">＋</span> 添加事件
+          </button>
+          <button
+            v-if="userStore.isLoggedIn"
+            type="button"
+            class="sm:hidden flex items-center justify-center w-9 h-9 rounded-md bg-primary-400 text-xl text-white shadow-sm transition-colors hover:bg-primary-500"
+            title="添加事件"
+            aria-label="添加事件"
+            @click="uiStore.openEventForm()"
+          >
+            ＋
+          </button>
+
           <!-- 主题切换 -->
           <button
             type="button"

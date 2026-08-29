@@ -1,6 +1,25 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import AppHeader from '@/components/common/AppHeader.vue'
+import AppModal from '@/components/common/AppModal.vue'
+import EventForm from '@/components/EventForm/EventForm.vue'
+import { useUiStore } from '@/stores/uiStore'
+
+const uiStore = useUiStore()
+const router = useRouter()
+
+async function onFormSaved() {
+  uiStore.closeEventForm()
+  // 等待弹窗关闭动画完成后再跳转，避免与路由过渡冲突导致新页面不渲染
+  await new Promise(resolve => setTimeout(resolve, 50))
+  if (router.currentRoute.value.path !== '/timeline') {
+    await router.replace('/timeline')
+  }
+}
+
+function onFormCancel() {
+  uiStore.closeEventForm()
+}
 </script>
 
 <template>
@@ -8,9 +27,9 @@ import AppHeader from '@/components/common/AppHeader.vue'
     <AppHeader />
 
     <main class="flex-1">
-      <RouterView v-slot="{ Component }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" />
+      <RouterView v-slot="{ Component, route: viewRoute }">
+        <Transition name="page">
+          <component :is="Component" :key="viewRoute.path" />
         </Transition>
       </RouterView>
     </main>
@@ -20,13 +39,32 @@ import AppHeader from '@/components/common/AppHeader.vue'
         Life-Point · 人生时间线 — 记录生活，反思人生 ✨
       </div>
     </footer>
+
+    <!-- 全局添加事件弹窗：任何页面均可触发，保存后跳转时间线 -->
+    <AppModal
+      :model-value="uiStore.showEventForm"
+      title="添加事件"
+      max-width="max-w-lg"
+      @update:model-value="(v: boolean) => { if (!v) uiStore.closeEventForm() }"
+      @close="onFormCancel"
+    >
+      <EventForm
+        :existing="null"
+        @saved="onFormSaved"
+        @cancel="onFormCancel"
+      />
+    </AppModal>
   </div>
 </template>
 
 <style scoped>
-.page-enter-active,
+.page-enter-active {
+  transition: opacity 0.2s ease 0.05s;
+}
 .page-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.15s ease;
+  position: absolute;
+  width: 100%;
 }
 .page-enter-from,
 .page-leave-to {

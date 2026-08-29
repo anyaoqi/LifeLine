@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CATEGORIES } from '@/utils/constants'
+import { CATEGORIES, EVENT_TYPES } from '@/utils/constants'
 import { useEventStore } from '@/stores/eventStore'
 
 const eventStore = useEventStore()
@@ -17,6 +17,19 @@ function isCategoryActive(key: string): boolean {
 function toggleCategory(key: string) {
   eventStore.toggleCategory(key as never)
 }
+
+function isTypeActive(key: string): boolean {
+  return eventStore.activeTypes.has(key as never)
+}
+
+function toggleType(key: string) {
+  eventStore.toggleType(key as never)
+}
+
+const onlyBigEvents = computed({
+  get: () => eventStore.onlyBigEvents,
+  set: (value: boolean) => eventStore.setOnlyBigEvents(value),
+})
 </script>
 
 <template>
@@ -42,6 +55,35 @@ function toggleCategory(key: string) {
         @click="keyword = ''"
       >
         ✕
+      </button>
+    </div>
+
+    <!-- 快捷筛选：大事与事件形态 -->
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <label
+        class="inline-flex cursor-pointer items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-all"
+        :class="onlyBigEvents
+          ? 'border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-200'
+          : 'border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300'"
+      >
+        <input v-model="onlyBigEvents" type="checkbox" class="rounded border-gray-300 text-primary-500 focus:ring-primary-400" />
+        ★ 只看大事
+      </label>
+      <span class="text-xs text-gray-400">形态：</span>
+      <button
+        v-for="eventType in EVENT_TYPES"
+        :key="eventType.key"
+        type="button"
+        :title="eventType.hint"
+        :class="[
+          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
+          isTypeActive(eventType.key)
+            ? 'border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-200'
+            : 'border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
+        ]"
+        @click="toggleType(eventType.key)"
+      >
+        <span>{{ eventType.icon }}</span>{{ eventType.label }}
       </button>
     </div>
 

@@ -1,39 +1,42 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import EventCard from './EventCard.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import { useUserStore } from '@/stores/userStore'
 import { useEventStore } from '@/stores/eventStore'
 import { formatChineseDate } from '@/utils/dateUtils'
+import { getCategory, MIN_BAND_HEIGHT, NODE_SIZE_BY_IMPORTANCE } from '@/utils/constants'
 import type { LifeEvent } from '@/types'
 
 const userStore = useUserStore()
 const eventStore = useEventStore()
-
 const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent]; add: [] }>()
 
-// 带年份与全局索引的事件项
 interface TimelineItem {
   event: LifeEvent
   year: number
-  isNewYear: boolean   // 该项是否是某年的第一个（用于渲染年份标题）
-  globalIndex: number  // 全局序号（驱动左右交替，避免按年份重置）
+  isNewYear: boolean
+  globalIndex: number
 }
 
-// 最新在上，按年份分组并打上全局索引；基于筛选后的事件
+interface PeriodBand {
+  id: string
+  top: number
+  height: number
+  lane: number
+  color: string
+  ongoing: boolean
+}
+
+// 最新在上，按年份分组并打上全局索引；基于筛选后的事件。
 const flatItems = computed<TimelineItem[]>(() => {
-  const sorted = [...eventStore.filteredSortedEvents].reverse() // 最新在上
+  const sorted = [...eventStore.filteredSortedEvents].reverse()
   const items: TimelineItem[] = []
-  let seenYears = new Set<number>()
+  const seenYears = new Set<number>()
   let idx = 0
   for (const event of sorted) {
     const year = new Date(event.date).getFullYear()
-    items.push({
-      event,
-      year,
-      isNewYear: !seenYears.has(year),
-      globalIndex: idx,
-    })
+    items.push({ event, year, isNewYear: !seenYears.has(year), globalIndex: idx })
     seenYears.add(year)
     idx++
   }
@@ -41,13 +44,143 @@ const flatItems = computed<TimelineItem[]>(() => {
 })
 
 const isEmpty = computed(() => eventStore.totalCount === 0)
-
-// 有事件但筛选后无结果（区别于完全没数据）
-const noFilterResult = computed(
-  () => !isEmpty.value && eventStore.filteredCount === 0
-)
-
+const noFilterResult = computed(() => !isEmpty.value && eventStore.filteredCount === 0)
 const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
+
+// ============ 区间色带布局 ============
+// 卡片高度不固定，色带位置必须以实际节点坐标计算；通过插值使跨年区间连续贯穿年份分组。
+const timelineRoot = ref<HTMLElement | null>(null)
+const itemElements = new Map<string, HTMLElement>()
+const periodBands = ref<PeriodBand[]>([])
+let layoutFrame: number | null = null
+let resizeObserver: ResizeObserver | null = null
+
+function setItemRef(eventId: string, element: unknown) {
+  if (element instanceof HTMLElement) itemElements.set(eventId, element)
+  else itemElements.delete(eventId)
+}
+
+function visualEndTime(event: LifeEvent): number {
+  if (event.isOngoing) return Date.now()
+  if (!event.endDate) return new Date(event.date).getTime()
+  const end = new Date(event.endDate)
+  // 年/月精度的结束时间按该时间段末尾计算，保证「2016年–2019年」贯穿完整 2019 年。
+  if (event.endDatePrecision === 'year') return new Date(end.getFullYear(), 11, 31, 12).getTime()
+  if (event.endDatePrecision === 'month') return new Date(end.getFullYear(), end.getMonth() + 1, 0, 12).getTime()
+  return end.getTime()
+}
+
+function schedulePeriodLayout() {
+  if (layoutFrame !== null) cancelAnimationFrame(layoutFrame)
+  layoutFrame = requestAnimationFrame(() => {
+    layoutFrame = null
+    void nextTick(buildPeriodBands)
+  })
+}
+
+function buildPeriodBands() {
+  const root = timelineRoot.value
+  if (!root) {
+    periodBands.value = []
+    return
+  }
+
+  const rootTop = root.getBoundingClientRect().top
+  const points = flatItems.value
+    .map(({ event }) => {
+      const item = itemElements.get(event.id)
+      const node = item?.querySelector<HTMLElement>('[data-timeline-node]')
+      if (!node) return null
+      const rect = node.getBoundingClientRect()
+      return { time: new Date(event.date).getTime(), y: rect.top - rootTop + rect.height / 2 }
+    })
+    .filter((point): point is { time: number; y: number } => point !== null)
+    .sort((a, b) => a.time - b.time)
+
+  if (points.length === 0) {
+    periodBands.value = []
+    return
+  }
+
+  function yAt(time: number): number {
+    const first = points[0]
+    const last = points[points.length - 1]
+    // 给最新事件之后（尤其是「至今」）留出一小段连续色带，而不是截断在最近节点。
+    if (time >= last.time) return Math.max(12, last.y - (time === last.time ? 0 : 28))
+    if (time <= first.time) return first.y
+    for (let index = 0; index < points.length - 1; index++) {
+      const before = points[index]
+      const after = points[index + 1]
+      if (time >= before.time && time <= after.time) {
+        const ratio = (time - before.time) / (after.time - before.time)
+        return before.y + (after.y - before.y) * ratio
+      }
+    }
+    return first.y
+  }
+
+  const periods = flatItems.value
+    .map(item => item.event)
+    .filter(event => event.type === 'period')
+    .map(event => ({
+      event,
+      start: new Date(event.date).getTime(),
+      end: visualEndTime(event),
+    }))
+    .sort((a, b) => a.start - b.start)
+
+  // 贪心分配并行泳道：两个重叠阶段不会盖住对方。
+  const laneEnds: number[] = []
+  periodBands.value = periods.map(({ event, start, end }) => {
+    let lane = laneEnds.findIndex(laneEnd => laneEnd < start)
+    if (lane === -1) {
+      lane = laneEnds.length
+      laneEnds.push(end)
+    } else {
+      laneEnds[lane] = end
+    }
+    const startY = yAt(start)
+    const endY = yAt(end)
+    const rawHeight = Math.abs(startY - endY)
+    const height = Math.max(MIN_BAND_HEIGHT, rawHeight)
+    return {
+      id: event.id,
+      top: Math.min(startY, endY) - (height - rawHeight) / 2,
+      height,
+      lane,
+      color: getCategory(event.category).color,
+      ongoing: event.isOngoing === true,
+    }
+  })
+}
+
+function nodeStyle(event: LifeEvent) {
+  const size = NODE_SIZE_BY_IMPORTANCE[event.importance ?? 3]
+  return {
+    width: `${size}px`,
+    height: `${size}px`,
+    backgroundColor: getCategory(event.category).color,
+    '--node-color': getCategory(event.category).color,
+    '--node-glow': `${getCategory(event.category).color}66`,
+  }
+}
+
+onMounted(() => {
+  schedulePeriodLayout()
+  if (timelineRoot.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(schedulePeriodLayout)
+    resizeObserver.observe(timelineRoot.value)
+  }
+  window.addEventListener('resize', schedulePeriodLayout)
+})
+
+watch(flatItems, schedulePeriodLayout, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  if (layoutFrame !== null) cancelAnimationFrame(layoutFrame)
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', schedulePeriodLayout)
+})
 </script>
 
 <template>
@@ -78,7 +211,23 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
     </AppButton>
   </div>
 
-  <div v-else class="timeline-container relative py-8 px-4 sm:px-6">
+  <div v-else ref="timelineRoot" class="timeline-container relative py-8 px-4 sm:px-6">
+    <!-- 区间色带图层：在中心轴后方连续渲染，不受年份标题切割 -->
+    <div class="timeline-period-layer" aria-hidden="true">
+      <div
+        v-for="band in periodBands"
+        :key="band.id"
+        class="timeline-period-band"
+        :class="{ 'timeline-period-band--ongoing': band.ongoing }"
+        :style="{
+          top: `${band.top}px`,
+          height: `${band.height}px`,
+          '--band-lane': band.lane,
+          '--band-color': band.color,
+        }"
+      ></div>
+    </div>
+
     <!-- 中心时间轴线 -->
     <div class="timeline-line"></div>
 
@@ -100,16 +249,29 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
       v-for="item in flatItems"
       :key="item.event.id"
       class="timeline-item"
-      :class="{ 'timeline-item--left': item.globalIndex % 2 === 1 }"
+      :class="{
+        'timeline-item--left': item.globalIndex % 2 === 1,
+        'timeline-item--period': item.event.type === 'period',
+      }"
       :style="{ '--item-index': item.globalIndex }"
+      :ref="(element) => setItemRef(item.event.id, element)"
     >
       <!-- 年份标题（仅在新年的第一项前显示） -->
       <div v-if="item.isNewYear" class="timeline-year-title">
         <span>{{ item.year }}</span>
       </div>
 
-      <!-- 节点 -->
-      <div class="timeline-node" :title="item.event.title"></div>
+      <!-- 节点：重要程度决定尺寸，分类决定颜色；区间节点用空心环以区别时间点 -->
+      <div
+        class="timeline-node"
+        :class="{
+          'timeline-node--period': item.event.type === 'period',
+          'timeline-node--milestone': item.event.importance >= 5,
+        }"
+        :style="nodeStyle(item.event)"
+        :title="`${item.event.title}（${item.event.type === 'period' ? '时间区间' : '时间点'}）`"
+        data-timeline-node
+      ></div>
 
       <!-- 卡片 -->
       <div class="timeline-card-wrapper">
@@ -120,6 +282,47 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
 </template>
 
 <style scoped>
+/* 区间色带位于主轴之后。实际坐标由节点测量并插值得到，因此可跨越年份标题连续延伸。 */
+.timeline-period-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.timeline-period-band {
+  --band-width: 6px;
+  position: absolute;
+  left: calc(20px + (var(--band-lane) * 10px));
+  width: var(--band-width);
+  min-height: 24px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--band-color) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--band-color) 25%, transparent);
+}
+
+/* 起止横杠让区间（▮）和时间点（●）不依赖文字也可区分。 */
+.timeline-period-band::before,
+.timeline-period-band::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 2px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: var(--band-color);
+}
+.timeline-period-band::before { top: 0; }
+.timeline-period-band::after { bottom: 0; }
+.timeline-period-band--ongoing::before {
+  height: 20px;
+  top: -8px;
+  background: linear-gradient(to bottom, transparent, var(--band-color));
+}
+
 /* 中心竖线 */
 .timeline-line {
   position: absolute;
@@ -129,6 +332,7 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   width: 2px;
   background-color: #D4A574;
   opacity: 0.6;
+  z-index: 1;
 }
 
 /* 移动端：线条偏左；桌面端：居中 */
@@ -136,6 +340,10 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   .timeline-line {
     left: 50%;
     transform: translateX(-50%);
+  }
+
+  .timeline-period-band {
+    left: calc(50% + (var(--band-lane) * 10px));
   }
 }
 
@@ -152,6 +360,7 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   background-color: rgba(212, 165, 116, 0.1);
   border-radius: 12px;
   border: 1px solid rgba(212, 165, 116, 0.3);
+  z-index: 3;
 }
 
 .timeline-start-label {
@@ -161,21 +370,35 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   text-align: left;
 }
 
-/* 节点圆圈 */
+/* 节点圆圈：尺寸由重要程度内联控制，分类色由 nodeStyle 注入。 */
 .timeline-node {
   position: absolute;
   left: 20px;
-  width: 12px;
-  height: 12px;
+  min-width: 8px;
+  min-height: 8px;
+  box-sizing: border-box;
   border-radius: 50%;
   transform: translateX(-50%);
-  z-index: 1;
+  z-index: 3;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* 区间用空心环，时间点是实心点。 */
+.timeline-node--period {
+  background-color: transparent !important;
+  border: 3px solid var(--node-color);
+}
+
+.timeline-node--milestone {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 14px var(--node-glow);
+}
+
 .dark .timeline-node {
   box-shadow: 0 0 0 3px rgba(42, 42, 42, 0.9);
+}
+.dark .timeline-node--milestone {
+  box-shadow: 0 0 0 3px rgba(26, 25, 24, 0.95), 0 0 14px var(--node-glow);
 }
 
 .timeline-node--start {
@@ -204,6 +427,7 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   display: flex;
   align-items: flex-start;
   margin-bottom: 24px;
+  z-index: 2;
 }
 
 /* 卡片包装：移动端在右侧，桌面端交替 */
@@ -286,8 +510,11 @@ const birthLabel = computed(() => formatChineseDate(userStore.user?.birthDate))
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* 暗色模式下节点白边改为深色边 */
+/* 暗色模式下节点白边改为深色边，里程碑仍保留发光。 */
 :global(.dark) .timeline-node {
   box-shadow: 0 0 0 3px rgba(26, 25, 24, 0.95);
+}
+:global(.dark) .timeline-node--milestone {
+  box-shadow: 0 0 0 3px rgba(26, 25, 24, 0.95), 0 0 14px var(--node-glow);
 }
 </style>

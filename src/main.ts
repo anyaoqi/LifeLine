@@ -10,13 +10,18 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-app.use(router)
 
-// 在挂载前初始化本地状态：加载用户档案、应用主题偏好
+// 先恢复 IndexedDB 中的用户档案，再注册 Router。
+// 否则首次导航会在 user 仍为空时触发 requiresUser 守卫，刷新受保护页面便会被错误重定向到首页。
 const userStore = useUserStore()
 const uiStore = useUiStore()
 uiStore.initTheme()
 
-Promise.all([userStore.initUser()]).finally(() => {
+async function bootstrap() {
+  await userStore.initUser()
+  app.use(router)
+  await router.isReady()
   app.mount('#app')
-})
+}
+
+void bootstrap()

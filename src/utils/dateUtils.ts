@@ -1,14 +1,58 @@
+import type { DatePrecision } from '@/types';
+
 // ============ 日期工具函数 ============
 
 /**
- * 将 ISO 日期字符串格式化为中文显示：「2024年6月15日」
- * 输入非法时返回空字符串
+ * 将 ISO 日期按用户记录的精度格式化为中文。
+ * 精度低时绝不补出不存在的月/日，避免伪造记忆。
  */
-export function formatChineseDate(iso: string | undefined | null): string {
+export function formatChineseDate(
+  iso: string | undefined | null,
+  precision: DatePrecision = 'day'
+): string {
   if (!iso) return '';
   const d = parseDate(iso);
   if (!d) return '';
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  const year = d.getFullYear();
+  if (precision === 'year') return `${year}年`;
+  const month = d.getMonth() + 1;
+  if (precision === 'month') return `${year}年${month}月`;
+  return `${year}年${month}月${d.getDate()}日`;
+}
+
+/**
+ * 取得适合所选精度的表单输入值：year -> YYYY、month -> YYYY-MM、day -> YYYY-MM-DD。
+ */
+export function toPrecisionInputValue(
+  iso: string | undefined | null,
+  precision: DatePrecision
+): string {
+  const d = parseDate(iso);
+  if (!d) return '';
+  const year = String(d.getFullYear());
+  if (precision === 'year') return year;
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  if (precision === 'month') return `${year}-${month}`;
+  return `${year}-${month}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 将 year/month/date 输入统一存为本地正午的 ISO 字符串。
+ * 展示时由 datePrecision 裁剪，因此补齐值只是排序锚点，不会暴露给用户。
+ */
+export function fromPrecisionInputValue(value: string, precision: DatePrecision): string {
+  if (!value) return '';
+  const parts = value.split('-').map(Number);
+  const year = parts[0];
+  const month = precision === 'year' ? 1 : parts[1];
+  const day = precision === 'day' ? parts[2] : 1;
+  if (!year || !month || !day) return '';
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  // 防止 Date 自动纠正非法输入（如 2024-02-31）。
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return '';
+  }
+  return date.toISOString();
 }
 
 /**
@@ -35,12 +79,7 @@ export function toDateInputValue(iso: string | undefined | null): string {
  * 将 input 控件的 yyyy-mm-dd 值转换为 ISO 字符串（本地时区，避免时差偏移）
  */
 export function fromDateInputValue(value: string): string {
-  if (!value) return '';
-  const [y, m, d] = value.split('-').map(Number);
-  if (!y || !m || !d) return '';
-  // 用本地正午构造，避免跨时区导致日期变化
-  const date = new Date(y, m - 1, d, 12, 0, 0);
-  return date.toISOString();
+  return fromPrecisionInputValue(value, 'day');
 }
 
 /**
@@ -49,13 +88,30 @@ export function fromDateInputValue(value: string): string {
 export function calcAge(birthIso: string | undefined | null): number {
   const birth = parseDate(birthIso);
   if (!birth) return 0;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
+  return getFullYearsBetween(birth, new Date());
+}
+
+/**
+ * 格式化事件发生时的年龄，并按照事件日期精度避免虚假的精确度。
+ * 例如：day ->「12 岁 3 个月」；year/month ->「约 12 岁」。
+ */
+export function formatAgeAtDate(
+  birthIso: string | undefined | null,
+  eventIso: string | undefined | null,
+  precision: DatePrecision = 'day'
+): string {
+  const birth = parseDate(birthIso);
+  const event = parseDate(eventIso);
+  if (!birth || !event || event < birth) return '';
+
+  const years = getFullYearsBetween(birth, event);
+  if (precision !== 'day') return `约 ${years} 岁`;
+
+  let months = (event.getFullYear() - birth.getFullYear()) * 12
+    + event.getMonth() - birth.getMonth();
+  if (event.getDate() < birth.getDate()) months--;
+  const remainingMonths = Math.max(0, months - years * 12);
+  return remainingMonths ? `${years} 岁 ${remainingMonths} 个月` : `${years} 岁`;
 }
 
 /**
@@ -80,47 +136,55 @@ export function relativeTime(iso: string | undefined | null): string {
 }
 
 /**
- * 格式化时间区间：起始日期 ~ 结束日期
- * 同年时省略结束年份：「2024年6月1日 ~ 8月30日」
- * 跨年时完整显示：「2010年9月1日 ~ 2016年6月30日」
+ * 格式化时间区间。起止日期精度可独立，未结束区间显示「至今」。
  */
-export function formatDateRange(startIso: string, endIso: string | undefined | null): string {
-  const start = formatChineseDate(startIso);
+export function formatDateRange(
+  startIso: string,
+  endIso: string | undefined | null,
+  startPrecision: DatePrecision = 'day',
+  endPrecision: DatePrecision = startPrecision,
+  isOngoing = false
+): string {
+  const start = formatChineseDate(startIso, startPrecision);
   if (!start) return '';
+  if (isOngoing) return `${start} – 至今`;
   if (!endIso) return start;
 
-  const endD = parseDate(endIso);
-  if (!endD) return start;
-
-  const startD = parseDate(startIso);
-  // 同年省略结束年份
-  if (startD && startD.getFullYear() === endD.getFullYear()) {
-    return `${start} ~ ${endD.getMonth() + 1}月${endD.getDate()}日`;
-  }
-  return `${start} ~ ${formatChineseDate(endIso)}`;
+  const end = formatChineseDate(endIso, endPrecision);
+  return end ? `${start} – ${end}` : start;
 }
 
 /**
- * 计算时间区间的持续时长描述
- * 如：「3 年」「8 个月」「15 天」
+ * 计算时间区间的持续时长。按自然日/月计算，不用 30/365 天粗略换算：
+ * 「8 天」「3 个月」「4 年 2 个月」。end 缺失且 isOngoing 时计算到今天。
  */
-export function calcDuration(startIso: string, endIso: string | undefined | null): string {
+export function calcDuration(
+  startIso: string,
+  endIso: string | undefined | null,
+  isOngoing = false
+): string {
   const start = parseDate(startIso);
-  const end = parseDate(endIso);
+  const end = endIso ? parseDate(endIso) : (isOngoing ? new Date() : null);
   if (!start || !end) return '';
 
-  const diffMs = end.getTime() - start.getTime();
-  if (diffMs < 0) return '';
+  const startDay = startOfLocalDay(start);
+  const endDay = startOfLocalDay(end);
+  const diffDays = Math.floor((endDay.getTime() - startDay.getTime()) / 86_400_000);
+  if (diffDays < 0) return '';
+  if (diffDays === 0) return '当天';
+  if (diffDays < 31) return `${diffDays} 天`;
 
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days === 0) return '当天';
-  if (days < 30) return `${days} 天`;
-  if (days < 365) return `${Math.floor(days / 30)} 个月`;
+  let months = (endDay.getFullYear() - startDay.getFullYear()) * 12
+    + endDay.getMonth() - startDay.getMonth();
+  if (endDay.getDate() < startDay.getDate()) months--;
 
-  const years = Math.floor(days / 365);
-  const remainMonths = Math.floor((days % 365) / 30);
-  if (remainMonths === 0) return `${years} 年`;
-  return `${years} 年 ${remainMonths} 个月`;
+  // 不满一个完整自然月时，仍使用天作为单位。
+  if (months <= 0) return `${diffDays} 天`;
+  if (months < 12) return `${months} 个月`;
+
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  return remainingMonths ? `${years} 年 ${remainingMonths} 个月` : `${years} 年`;
 }
 
 /**
@@ -137,6 +201,21 @@ export function isFuture(iso: string | undefined | null): boolean {
   const d = parseDate(iso);
   if (!d) return false;
   return d.getTime() > Date.now();
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getFullYearsBetween(start: Date, end: Date): number {
+  let years = end.getFullYear() - start.getFullYear();
+  if (
+    end.getMonth() < start.getMonth()
+    || (end.getMonth() === start.getMonth() && end.getDate() < start.getDate())
+  ) {
+    years--;
+  }
+  return Math.max(0, years);
 }
 
 // 解析 ISO 字符串为 Date，非法返回 null

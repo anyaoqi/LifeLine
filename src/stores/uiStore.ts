@@ -7,6 +7,8 @@ const THEME_STORAGE_KEY = 'life-point-theme';
 
 export const useUiStore = defineStore('ui', () => {
   const theme = ref<Theme>('auto');
+  // 全局事件表单弹窗状态：任何页面均可直接打开，保存后跳转时间线。
+  const showEventForm = ref(false);
   // 系统当前实际是深色还是浅色（用于 auto 模式）
   const systemDark = ref(false);
   let mediaListener: ((e: MediaQueryListEvent) => void) | null = null;
@@ -71,6 +73,16 @@ export const useUiStore = defineStore('ui', () => {
     applyTheme();
   }
 
+  // 打开全局新增事件弹窗
+  function openEventForm() {
+    showEventForm.value = true;
+  }
+
+  // 关闭全局新增事件弹窗
+  function closeEventForm() {
+    showEventForm.value = false;
+  }
+
   // 统一清理本地数据
   function clearLocalData() {
     storageUtils.clearAll();
@@ -78,12 +90,15 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     theme,
+    showEventForm,
     systemDark,
     isDark,
     setTheme,
     cycleTheme,
     initTheme,
     applyTheme,
+    openEventForm,
+    closeEventForm,
     clearLocalData,
   };
 });
