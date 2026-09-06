@@ -163,13 +163,13 @@ export const eventService = {
 // localStorage 工具函数
 export const storageUtils = {
   // 存储主题偏好
-  setTheme(theme: 'light' | 'dark' | 'auto'): void {
+  setTheme(theme: 'light' | 'dark'): void {
     localStorage.setItem('theme', theme);
   },
 
   // 获取主题偏好
-  getTheme(): 'light' | 'dark' | 'auto' {
-    return (localStorage.getItem('theme') as any) || 'auto';
+  getTheme(): 'light' | 'dark' {
+    return (localStorage.getItem('theme') as any) || 'light';
   },
 
   // 存储当前用户ID

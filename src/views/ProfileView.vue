@@ -31,7 +31,7 @@ function onSaved(_user: UserProfile) {
 
     <ProfileCard @edit="editing = true" />
 
-    <AppModal v-model="editing" title="编辑个人档案" max-width="max-w-md">
+    <AppModal v-model="editing" title="编辑个人档案" max-width="max-w-lg">
       <ProfileEditor :existing="userStore.user" @saved="onSaved">
         <template #cancel>
           <button

@@ -22,6 +22,7 @@ onMounted(async () => {
 })
 
 function onProfileCreated(_user: UserProfile) {
+  console.log('DEBUG: onProfileCreated CALLED with user:', _user)
   // 创建成功后跳转到时间线
   router.push('/timeline')
 }
@@ -36,24 +37,23 @@ function addEvent() {
 </script>
 
 <template>
-  <!-- 未建档：引导创建档案 -->
-  <div v-if="!userStore.isLoggedIn" class="max-w-md mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-fade-in">
-    <div class="text-center mb-8">
-      <div class="text-6xl mb-4">✦</div>
-      <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">
-        欢迎来到 Life-Point
-      </h1>
-      <p class="mt-3 text-gray-500 dark:text-gray-400 leading-relaxed">
-        记录、回顾并可视化你的人生轨迹。<br />
-        先创建你的个人档案，开始这段旅程吧。
-      </p>
-    </div>
+  <!-- 未建档：引导创建档案（桌面端左右布局：欢迎语在左，表单在右） -->
+  <div v-if="!userStore.isLoggedIn" class="max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-fade-in">
+    <div class="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+      <div class="text-center lg:text-left">
+        <div class="text-6xl mb-4">✦</div>
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100">
+          欢迎来到 Life-Point
+        </h1>
+        <p class="mt-3 text-gray-500 dark:text-gray-400 leading-relaxed">
+          记录、回顾并可视化你的人生轨迹。<br />
+          先创建你的个人档案，开始这段旅程吧。
+        </p>
+      </div>
 
-    <div class="card-base p-6 sm:p-8">
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5">
-        创建个人档案
-      </h2>
-      <ProfileEditor @saved="onProfileCreated" />
+      <div class="card-base p-6 sm:p-8">
+        <ProfileEditor @saved="onProfileCreated" />
+      </div>
     </div>
   </div>
 
