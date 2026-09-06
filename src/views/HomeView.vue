@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ProfileEditor from '@/components/Profile/ProfileEditor.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -21,10 +21,28 @@ onMounted(async () => {
   }
 })
 
-function onProfileCreated(_user: UserProfile) {
-  console.log('DEBUG: onProfileCreated CALLED with user:', _user)
-  // 创建成功后跳转到时间线
-  router.push('/timeline')
+// 建档状态可能在已停留于首页时才变为 true（欢迎页表单提交成功即是如此，
+// 此时 onMounted 早已执行完毕不会重跑）。用 watch 兜底加载事件，
+// 避免仪表盘因 events 为空而显示空白/旧数据；切走再切回才有内容正是这个原因。
+watch(
+  () => userStore.isLoggedIn,
+  async (loggedIn) => {
+    if (!loggedIn) return
+    await eventStore.loadEvents().catch(() => {})
+    // 若 ProfileEditor 的 saved 回调因 v-if 卸载时序丢失导致仍停留在首页，
+    // 在此补一次跳转，保证建档后一定离开欢迎页到达时间线。
+    if (router.currentRoute.value.path === '/') {
+      await router.push('/timeline').catch(() => {})
+    }
+  },
+)
+
+async function onProfileCreated(_user: UserProfile) {
+  // 首选路径：emit 正常送达时立即加载并跳转；watch 会做幂等的二次兜底。
+  await eventStore.loadEvents().catch(() => {})
+  if (router.currentRoute.value.path !== '/timeline') {
+    await router.push('/timeline').catch(() => {})
+  }
 }
 
 function goTimeline() {

@@ -138,7 +138,6 @@ function onBirthUpdate(iso: string) {
 }
 
 async function handleSubmit() {
-  console.log('DEBUG: handleSubmit called!')
   const input = {
     name: form.name.trim(),
     birthDate: form.birthDate,
