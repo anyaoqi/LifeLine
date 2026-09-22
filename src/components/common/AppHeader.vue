@@ -8,27 +8,9 @@ const uiStore = useUiStore()
 const userStore = useUserStore()
 const route = useRoute()
 
-const themeIcon = computed(() => {
-  switch (uiStore.theme) {
-    case 'light':
-      return '☀️'
-    case 'dark':
-      return '🌙'
-    default:
-      return '🖥️'
-  }
-})
+const themeIcon = computed(() => (uiStore.isDark ? '🌙' : '☀️'))
 
-const themeLabel = computed(() => {
-  switch (uiStore.theme) {
-    case 'light':
-      return '浅色'
-    case 'dark':
-      return '深色'
-    default:
-      return '跟随系统'
-  }
-})
+const themeLabel = computed(() => (uiStore.isDark ? '深色' : '浅色'))
 
 const navItems = computed(() => {
   const base = [{ name: '首页', to: '/' }]
@@ -115,7 +97,7 @@ function isActive(to: string): boolean {
             class="flex items-center justify-center w-9 h-9 rounded-md text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
             :title="`主题：${themeLabel}（点击切换）`"
             :aria-label="`切换主题，当前 ${themeLabel}`"
-            @click="uiStore.cycleTheme()"
+            @click="uiStore.toggleTheme()"
           >
             <span class="text-lg">{{ themeIcon }}</span>
           </button>

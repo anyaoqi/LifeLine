@@ -32,7 +32,6 @@ let pendingFile: File | null = null
 const themeOptions: { value: Theme; label: string; icon: string }[] = [
   { value: 'light', label: '浅色', icon: '☀️' },
   { value: 'dark', label: '深色', icon: '🌙' },
-  { value: 'auto', label: '跟随系统', icon: '🖥️' },
 ]
 
 function selectTheme(t: Theme) {
@@ -134,7 +133,7 @@ async function confirmClearAll() {
         选择你喜欢的主题外观
       </p>
 
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-2 gap-3">
         <button
           v-for="opt in themeOptions"
           :key="opt.value"

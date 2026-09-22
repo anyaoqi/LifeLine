@@ -44,7 +44,6 @@ export function getCategory(key: EventCategory | string | undefined): CategoryDe
 export const THEME_LABELS = {
   light: '浅色',
   dark: '深色',
-  auto: '跟随系统',
 } as const;
 
 // ============ 事件形态（时间点 / 时间区间） ============

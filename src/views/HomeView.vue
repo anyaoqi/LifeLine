@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ProfileEditor from '@/components/Profile/ProfileEditor.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -21,9 +21,28 @@ onMounted(async () => {
   }
 })
 
-function onProfileCreated(_user: UserProfile) {
-  // 创建成功后跳转到时间线
-  router.push('/timeline')
+// 建档状态可能在已停留于首页时才变为 true（欢迎页表单提交成功即是如此，
+// 此时 onMounted 早已执行完毕不会重跑）。用 watch 兜底加载事件，
+// 避免仪表盘因 events 为空而显示空白/旧数据；切走再切回才有内容正是这个原因。
+watch(
+  () => userStore.isLoggedIn,
+  async (loggedIn) => {
+    if (!loggedIn) return
+    await eventStore.loadEvents().catch(() => {})
+    // 若 ProfileEditor 的 saved 回调因 v-if 卸载时序丢失导致仍停留在首页，
+    // 在此补一次跳转，保证建档后一定离开欢迎页到达时间线。
+    if (router.currentRoute.value.path === '/') {
+      await router.push('/timeline').catch(() => {})
+    }
+  },
+)
+
+async function onProfileCreated(_user: UserProfile) {
+  // 首选路径：emit 正常送达时立即加载并跳转；watch 会做幂等的二次兜底。
+  await eventStore.loadEvents().catch(() => {})
+  if (router.currentRoute.value.path !== '/timeline') {
+    await router.push('/timeline').catch(() => {})
+  }
 }
 
 function goTimeline() {
@@ -36,24 +55,23 @@ function addEvent() {
 </script>
 
 <template>
-  <!-- 未建档：引导创建档案 -->
-  <div v-if="!userStore.isLoggedIn" class="max-w-md mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-fade-in">
-    <div class="text-center mb-8">
-      <div class="text-6xl mb-4">✦</div>
-      <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">
-        欢迎来到 Life-Point
-      </h1>
-      <p class="mt-3 text-gray-500 dark:text-gray-400 leading-relaxed">
-        记录、回顾并可视化你的人生轨迹。<br />
-        先创建你的个人档案，开始这段旅程吧。
-      </p>
-    </div>
+  <!-- 未建档：引导创建档案（桌面端左右布局：欢迎语在左，表单在右） -->
+  <div v-if="!userStore.isLoggedIn" class="max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-fade-in">
+    <div class="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+      <div class="text-center lg:text-left">
+        <div class="text-6xl mb-4">✦</div>
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100">
+          欢迎来到 Life-Point
+        </h1>
+        <p class="mt-3 text-gray-500 dark:text-gray-400 leading-relaxed">
+          记录、回顾并可视化你的人生轨迹。<br />
+          先创建你的个人档案，开始这段旅程吧。
+        </p>
+      </div>
 
-    <div class="card-base p-6 sm:p-8">
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5">
-        创建个人档案
-      </h2>
-      <ProfileEditor @saved="onProfileCreated" />
+      <div class="card-base p-6 sm:p-8">
+        <ProfileEditor @saved="onProfileCreated" />
+      </div>
     </div>
   </div>
 

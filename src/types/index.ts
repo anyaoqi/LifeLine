@@ -26,7 +26,7 @@ export type EventCategory =
   | 'other';      // 其他
 
 // ============ 主题 ============
-export type Theme = 'light' | 'dark' | 'auto';
+export type Theme = 'light' | 'dark';
 
 // ============ 用户档案 ============
 export interface UserProfile {

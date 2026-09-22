@@ -6,21 +6,12 @@ import { storageUtils } from '@/services/storageService';
 const THEME_STORAGE_KEY = 'life-point-theme';
 
 export const useUiStore = defineStore('ui', () => {
-  const theme = ref<Theme>('auto');
+  const theme = ref<Theme>('light');
   // 全局事件表单弹窗状态：任何页面均可直接打开，保存后跳转时间线。
   const showEventForm = ref(false);
-  // 系统当前实际是深色还是浅色（用于 auto 模式）
-  const systemDark = ref(false);
-  let mediaListener: ((e: MediaQueryListEvent) => void) | null = null;
 
-  // 最终是否应用深色模式
-  const isDark = computed(() => {
-    if (theme.value === 'auto') return systemDark.value;
-    return theme.value === 'dark';
-  });
-
-  // 主题循环：light -> dark -> auto -> light（用于 Header 切换按钮）
-  const themeCycle: Theme[] = ['light', 'dark', 'auto'];
+  // 最终是否应用深色模式（只有浅色 / 深色两态）
+  const isDark = computed(() => theme.value === 'dark');
 
   // 设置主题并持久化 + 应用到 DOM
   function setTheme(next: Theme) {
@@ -29,11 +20,9 @@ export const useUiStore = defineStore('ui', () => {
     applyTheme();
   }
 
-  // 循环切换主题
-  function cycleTheme() {
-    const idx = themeCycle.indexOf(theme.value);
-    const next = themeCycle[(idx + 1) % themeCycle.length];
-    setTheme(next);
+  // 浅色 <-> 深色直接切换（用于 Header 切换按钮）
+  function toggleTheme() {
+    setTheme(theme.value === 'dark' ? 'light' : 'dark');
   }
 
   // 应用 isDark 到 <html> 的 class
@@ -48,28 +37,11 @@ export const useUiStore = defineStore('ui', () => {
     root.style.colorScheme = isDark.value ? 'dark' : 'light';
   }
 
-  // 初始化：读取偏好、监听系统变化、应用到 DOM
+  // 初始化：读取偏好并应用到 DOM（只有浅色 / 深色两态；
+  // 老数据若存的是 'auto' 则迁移为浅色）
   function initTheme() {
-    // 读取用户偏好
-    const saved = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    theme.value = saved ?? 'auto';
-
-    // 读取系统偏好
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      systemDark.value = mq.matches;
-
-      // 防止重复绑定（HMR 场景下 initTheme 可能被多次调用）
-      if (mediaListener) {
-        mq.removeEventListener('change', mediaListener);
-      }
-      mediaListener = (e: MediaQueryListEvent) => {
-        systemDark.value = e.matches;
-        applyTheme();
-      };
-      mq.addEventListener('change', mediaListener);
-    }
-
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    theme.value = saved === 'dark' ? 'dark' : 'light';
     applyTheme();
   }
 
@@ -91,10 +63,9 @@ export const useUiStore = defineStore('ui', () => {
   return {
     theme,
     showEventForm,
-    systemDark,
     isDark,
     setTheme,
-    cycleTheme,
+    toggleTheme,
     initTheme,
     applyTheme,
     openEventForm,
