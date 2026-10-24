@@ -4,6 +4,7 @@
 
 import type { LifeEvent, EventCategory } from '@/types';
 import { CATEGORIES, getCategory } from './constants';
+import { calcAge } from './dateUtils';
 
 // ============ 年度统计 ============
 export interface YearStat {
@@ -210,3 +211,88 @@ export function getHeatLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
 // ============ 工具：安全获取分类定义 ============
 // 重新导出，方便组件从单一入口访问
 export { getCategory };
+
+// ============ 人生比例（v0.6.0） ============
+export interface LifeRatioItem {
+  key: EventCategory;
+  label: string;
+  color: string;
+  /** 该分类区间事件的累计年数(保留 1 位小数) */
+  years: number;
+  /** 占已活岁数的百分比(保留 1 位小数) */
+  percentage: number;
+}
+
+/**
+ * 人生比例:各分类的「时间区间」事件累计覆盖了多少年,
+ * 除以已活岁数。时间点事件不计入(它们是瞬间,不是岁月)。
+ */
+export function getLifeRatio(
+  events: LifeEvent[],
+  birthIso: string | undefined | null,
+): { items: LifeRatioItem[]; totalYears: number } {
+  if (!birthIso) return { items: [], totalYears: 0 };
+  const totalYears = calcAge(birthIso);
+  if (totalYears <= 0 || events.length === 0) return { items: [], totalYears };
+
+  const now = Date.now();
+  const yearsByCat = new Map<EventCategory, number>();
+  for (const ev of events) {
+    if (ev.type !== 'period') continue;
+    const start = new Date(ev.date).getTime();
+    const end = ev.isOngoing
+      ? now
+      : ev.endDate
+        ? new Date(ev.endDate).getTime()
+        : start;
+    // 夹到 [出生, 现在] 区间,未来阶段不虚增
+    const birth = new Date(birthIso).getTime();
+    const clampedStart = Math.max(start, birth);
+    const clampedEnd = Math.min(Math.max(end, clampedStart), now);
+    const months =
+      (new Date(clampedEnd).getFullYear() - new Date(clampedStart).getFullYear()) * 12 +
+      (new Date(clampedEnd).getMonth() - new Date(clampedStart).getMonth());
+    if (months <= 0) continue;
+    yearsByCat.set(ev.category, (yearsByCat.get(ev.category) ?? 0) + months / 12);
+  }
+
+  const items: LifeRatioItem[] = CATEGORIES.map((def) => {
+    const years = Math.round((yearsByCat.get(def.key) ?? 0) * 10) / 10;
+    return {
+      key: def.key,
+      label: def.label,
+      color: def.color,
+      years,
+      percentage: Math.round((years / totalYears) * 1000) / 10,
+    };
+  })
+    .filter((i) => i.years > 0)
+    .sort((a, b) => b.years - a.years);
+
+  return { items, totalYears };
+}
+
+// ============ 那年今日（v0.6.0） ============
+export interface OnThisDayItem {
+  event: LifeEvent;
+  year: number;
+}
+
+/**
+ * 那年今日:与今天同月同日(或同月)的历史记录。
+ * day 精度比对月+日;month 精度只比对月;year 精度不参与。
+ */
+export function getOnThisDay(events: LifeEvent[], now: Date = new Date()): OnThisDayItem[] {
+  const m = now.getMonth();
+  const d = now.getDate();
+  const result: OnThisDayItem[] = [];
+  for (const ev of events) {
+    const date = new Date(ev.date);
+    if (ev.datePrecision === 'day') {
+      if (date.getMonth() === m && date.getDate() === d) result.push({ event: ev, year: date.getFullYear() });
+    } else if (ev.datePrecision === 'month') {
+      if (date.getMonth() === m) result.push({ event: ev, year: date.getFullYear() });
+    }
+  }
+  return result.sort((a, b) => a.year - b.year);
+}
