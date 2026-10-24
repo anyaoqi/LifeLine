@@ -123,6 +123,11 @@ export const eventService = {
     return db.events.add(normalizeEvent(event));
   },
 
+  // 批量添加事件（人生模板草稿一键铺底）
+  async addEvents(events: LifeEvent[]): Promise<string> {
+    return db.events.bulkAdd(events.map(normalizeEvent));
+  },
+
   // 更新事件
   async updateEvent(event: LifeEvent): Promise<number> {
     return db.events.put(normalizeEvent(event));

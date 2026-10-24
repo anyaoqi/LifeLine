@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus, Sparkles } from 'lucide-vue-next'
 import EventCard from './EventCard.vue'
 import {
   useVirtualTimeline,
@@ -23,8 +23,10 @@ import type { Importance, LifeEvent } from '@/types'
  */
 const emit = defineEmits<{
   add: []
+  templates: []
   edit: [event: LifeEvent]
   delete: [event: LifeEvent]
+  confirm: [event: LifeEvent]
 }>()
 
 const eventStore = useEventStore()
@@ -192,16 +194,25 @@ function onKeydown(e: KeyboardEvent) {
     <h3 class="font-display text-xl font-semibold text-app-ink">
       人生纪念册还是空的
     </h3>
-    <p class="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-app-ink-soft">
-      记下第一件小事,或者从人生模板开始铺底
+    <p class="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-app-ink-soft">
+      从人生模板一键铺底(学业、职业、感情…),或者记下第一件小事
     </p>
-    <button
-      type="button"
-      class="mt-6 inline-flex h-10 items-center gap-1.5 rounded-lg bg-app-accent px-4 text-sm font-medium text-white shadow-sm transition-all hover:brightness-95 active:scale-95"
-      @click="emit('add')"
-    >
-      <Plus :size="16" /> 记录第一件事
-    </button>
+    <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <button
+        type="button"
+        class="inline-flex h-10 items-center gap-1.5 rounded-lg bg-app-accent px-4 text-sm font-medium text-white shadow-sm transition-all hover:brightness-95 active:scale-95"
+        @click="emit('templates')"
+      >
+        <Sparkles :size="15" /> 从人生模板开始
+      </button>
+      <button
+        type="button"
+        class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-app-border-strong px-4 text-sm font-medium text-app-ink transition-colors hover:bg-app-bg-deep"
+        @click="emit('add')"
+      >
+        <Plus :size="15" /> 记录第一件事
+      </button>
+    </div>
   </div>
 
   <div v-else-if="noFilterResult" class="animate-fade-in px-4 py-16 text-center">
@@ -336,6 +347,7 @@ function onKeydown(e: KeyboardEvent) {
                 :measure-key="`${item.event.id}:${item.event.updatedAt}:${item.kind}`"
                 @edit="emit('edit', $event)"
                 @delete="emit('delete', $event)"
+                @confirm="emit('confirm', $event)"
               />
             </div>
           </div>

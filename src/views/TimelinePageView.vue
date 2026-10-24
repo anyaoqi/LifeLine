@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Camera } from 'lucide-vue-next'
+import { Camera, Sparkles } from 'lucide-vue-next'
 import VirtualTimeline from '@/components/Timeline/VirtualTimeline.vue'
 import TimelineFilter from '@/components/Timeline/TimelineFilter.vue'
 import EventFormPanel from '@/components/event/EventFormPanel.vue'
+import LifeTemplatePicker from '@/components/event/LifeTemplatePicker.vue'
 import EventDeleteConfirm from '@/components/EventForm/EventDeleteConfirm.vue'
 import AppModal from '@/components/common/AppModal.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -36,6 +37,18 @@ const yearSpan = computed(() => {
 // ============ 编辑弹窗(新增走全局) ============
 const editFormOpen = ref(false)
 const editingEvent = ref<LifeEvent | null>(null)
+
+// ============ 人生模板选择器 ============
+const templatePickerOpen = ref(false)
+
+async function onConfirmDraft(event: LifeEvent) {
+  try {
+    await eventStore.confirmDraft(event.id)
+    toast.success(`「${event.title}」已确认`)
+  } catch {
+    toast.error('确认失败,请重试')
+  }
+}
 
 // ============ 删除确认 + 撤销 ============
 const deleteOpen = ref(false)
@@ -127,18 +140,29 @@ async function handleExport() {
             {{ eventStore.totalCount }} 条记录<template v-if="yearSpan"> · {{ yearSpan }}</template>
           </p>
         </div>
-        <AppButton
-          v-if="eventStore.totalCount > 0"
-          variant="ghost"
-          size="sm"
-          class="flex-shrink-0"
-          :disabled="exporting"
-          :title="exporting ? '正在生成图片…' : '导出时间线为图片'"
-          @click="handleExport"
-        >
-          <Camera :size="15" />
-          {{ exporting ? '导出中…' : '导出图片' }}
-        </AppButton>
+        <div class="flex flex-shrink-0 items-center gap-2">
+          <AppButton
+            variant="ghost"
+            size="sm"
+            title="从人生模板生成草稿"
+            @click="templatePickerOpen = true"
+          >
+            <Sparkles :size="14" />
+            <span class="hidden sm:inline">模板</span>
+          </AppButton>
+          <AppButton
+            v-if="eventStore.totalCount > 0"
+            variant="ghost"
+            size="sm"
+            class="flex-shrink-0"
+            :disabled="exporting"
+            :title="exporting ? '正在生成图片…' : '导出时间线为图片'"
+            @click="handleExport"
+          >
+            <Camera :size="15" />
+            {{ exporting ? '导出中…' : '导出图片' }}
+          </AppButton>
+        </div>
       </header>
 
       <!-- 筛选 -->
@@ -149,10 +173,18 @@ async function handleExport() {
       <!-- 时间线 -->
       <VirtualTimeline
         @add="uiStore.openEventForm()"
+        @templates="templatePickerOpen = true"
         @edit="onEdit"
         @delete="onDelete"
+        @confirm="onConfirmDraft"
       />
     </div>
+
+    <!-- 人生模板选择器 -->
+    <LifeTemplatePicker
+      v-model="templatePickerOpen"
+      @close="templatePickerOpen = false"
+    />
 
     <!-- 浮动记录按钮 -->
     <button

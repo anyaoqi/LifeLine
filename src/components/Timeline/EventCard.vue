@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CalendarDays, MapPin, Pencil, Trash2 } from 'lucide-vue-next'
+import { CalendarDays, Check, MapPin, Pencil, Trash2 } from 'lucide-vue-next'
 import { getCategory } from '@/utils/constants'
 import { formatDateRange, calcDuration, formatAgeAtDate } from '@/utils/dateUtils'
 import { useUserStore } from '@/stores/userStore'
@@ -14,7 +14,7 @@ import type { LifeEvent } from '@/types'
  * 高度参与虚拟滚动布局,根元素务必带 data-measure-key。
  */
 const props = defineProps<{ event: LifeEvent; measureKey?: string }>()
-const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent] }>()
+const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent]; confirm: [event: LifeEvent] }>()
 
 const userStore = useUserStore()
 const category = computed(() => getCategory(props.event.category))
@@ -46,6 +46,7 @@ const ageText = computed(() =>
   <article
     v-if="kind === 'milestone'"
     class="tl-card tl-card--milestone group"
+    :class="{ 'tl-card--draft': event.isDraft }"
     :style="{ '--cat': category.color }"
     tabindex="0"
     :data-measure-key="measureKey"
@@ -54,10 +55,17 @@ const ageText = computed(() =>
     <div class="flex items-start justify-between gap-2">
       <h3 class="font-display text-lg font-semibold leading-snug text-app-ink">
         {{ event.title }}
+        <span
+          v-if="event.isDraft"
+          class="ml-1.5 inline-flex items-center rounded-full border border-dashed border-app-accent/60 px-1.5 py-0.5 align-middle text-[10px] font-medium text-app-accent"
+        >草稿</span>
       </h3>
       <div class="tl-actions">
         <button type="button" class="tl-action" :aria-label="`编辑 ${event.title}`" @click.stop="emit('edit', event)">
           <Pencil :size="14" />
+        </button>
+        <button v-if="event.isDraft" type="button" class="tl-action tl-action--confirm" :aria-label="`确认 ${event.title}`" title="确认这条记录" @click.stop="emit('confirm', event)">
+          <Check :size="14" />
         </button>
         <button type="button" class="tl-action tl-action--danger" :aria-label="`删除 ${event.title}`" @click.stop="emit('delete', event)">
           <Trash2 :size="14" />
@@ -91,11 +99,18 @@ const ageText = computed(() =>
   <div
     v-else-if="kind === 'minor'"
     class="tl-minor group"
+    :class="{ 'tl-minor--draft': event.isDraft }"
     tabindex="0"
     :data-measure-key="measureKey"
   >
     <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full" :style="{ backgroundColor: category.color }" />
-    <span class="min-w-0 flex-1 truncate text-sm text-app-ink">{{ event.title }}</span>
+    <span class="min-w-0 flex-1 truncate text-sm text-app-ink">
+      {{ event.title }}
+      <span
+        v-if="event.isDraft"
+        class="ml-1 inline-flex items-center rounded-full border border-dashed border-app-accent/60 px-1 text-[10px] text-app-accent"
+      >草稿</span>
+    </span>
     <span v-if="event.location" class="hidden items-center gap-0.5 text-xs text-app-ink-faint sm:inline-flex">
       <MapPin :size="11" />{{ event.location }}
     </span>
@@ -114,6 +129,7 @@ const ageText = computed(() =>
   <div
     v-else
     class="tl-card group"
+    :class="{ 'tl-card--draft': event.isDraft }"
     :style="{ '--cat': category.color }"
     tabindex="0"
     :data-measure-key="measureKey"
@@ -121,10 +137,17 @@ const ageText = computed(() =>
     <div class="flex items-start justify-between gap-2">
       <h3 class="font-display text-base font-semibold leading-snug text-app-ink">
         {{ event.title }}
+        <span
+          v-if="event.isDraft"
+          class="ml-1.5 inline-flex items-center rounded-full border border-dashed border-app-accent/60 px-1.5 py-0.5 align-middle text-[10px] font-medium text-app-accent"
+        >草稿</span>
       </h3>
       <div class="tl-actions">
         <button type="button" class="tl-action" :aria-label="`编辑 ${event.title}`" @click.stop="emit('edit', event)">
           <Pencil :size="14" />
+        </button>
+        <button v-if="event.isDraft" type="button" class="tl-action tl-action--confirm" :aria-label="`确认 ${event.title}`" title="确认这条记录" @click.stop="emit('confirm', event)">
+          <Check :size="14" />
         </button>
         <button type="button" class="tl-action tl-action--danger" :aria-label="`删除 ${event.title}`" @click.stop="emit('delete', event)">
           <Trash2 :size="14" />
@@ -181,6 +204,16 @@ const ageText = computed(() =>
   width: 3px;
   border-radius: 999px;
   background: var(--cat);
+}
+
+.tl-card--draft {
+  border-style: dashed;
+}
+.tl-minor--draft {
+  border: 1px dashed var(--app-border-strong);
+}
+.tl-action--confirm:hover {
+  color: var(--app-accent);
 }
 
 .tl-minor {

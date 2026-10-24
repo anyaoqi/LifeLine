@@ -232,6 +232,30 @@ export const useEventStore = defineStore('event', () => {
     }
   }
 
+  // ============ 人生模板草稿（v0.6.0） ============
+  // 批量生成草稿事件（isDraft=true,虚线卡片展示,逐条确认后转正）
+  async function createDrafts(inputs: LifeEventInput[]): Promise<number> {
+    if (!userStore.userId) throw new Error('未找到用户');
+    if (inputs.length === 0) return 0;
+    const now = new Date().toISOString();
+    const drafts: LifeEvent[] = inputs.map(input => ({
+      ...input,
+      id: eventService.generateId(),
+      userId: userStore.userId!,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    await eventService.addEvents(drafts);
+    mutationSeq++;
+    events.value.push(...drafts);
+    return drafts.length;
+  }
+
+  // 确认草稿：清除 isDraft 标记,事件转正
+  async function confirmDraft(id: string): Promise<void> {
+    await updateEvent(id, { isDraft: false });
+  }
+
   // 主动放弃撤销（窗口到期或用户关闭提示）
   function dismissRecentlyDeleted() {
     recentlyDeleted.value = null;
@@ -272,6 +296,8 @@ export const useEventStore = defineStore('event', () => {
     updateEvent,
     deleteEvent,
     undoDelete,
+    createDrafts,
+    confirmDraft,
     dismissRecentlyDeleted,
     setKeyword,
     toggleCategory,
