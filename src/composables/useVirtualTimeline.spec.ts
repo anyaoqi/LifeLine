@@ -90,7 +90,7 @@ describe('useVirtualTimeline 布局引擎', () => {
   it('高度缓存生效:测量回填后总高随之修正', () => {
     const events = ref([makeEvent({ date: '2020-01-01', id: 'a' })])
     const container = ref<HTMLElement | null>(null)
-    const { layout, totalHeight, scheduleMeasure } = useVirtualTimeline(events, container)
+    const { layout, totalHeight } = useVirtualTimeline(events, container)
 
     const before = totalHeight.value
     // 模拟 collectMeasurements 读到真实高度(模拟 DOM 不可行,直接改内部 cache 不可达;
