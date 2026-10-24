@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Camera } from 'lucide-vue-next'
 import VirtualTimeline from '@/components/Timeline/VirtualTimeline.vue'
 import TimelineFilter from '@/components/Timeline/TimelineFilter.vue'
-import EventForm from '@/components/EventForm/EventForm.vue'
+import EventFormPanel from '@/components/event/EventFormPanel.vue'
 import EventDeleteConfirm from '@/components/EventForm/EventDeleteConfirm.vue'
 import AppModal from '@/components/common/AppModal.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -174,7 +174,7 @@ async function handleExport() {
       max-width="max-w-lg"
       @close="onEditCancel"
     >
-      <EventForm
+      <EventFormPanel
         :existing="editingEvent"
         @saved="onEditSaved"
         @cancel="onEditCancel"
@@ -183,13 +183,14 @@ async function handleExport() {
           <AppButton
             variant="ghost"
             type="button"
+            size="sm"
             class="!text-red-500"
             @click="() => { editFormOpen = false; onDelete(editingEvent!); }"
           >
-            🗑️ 删除
+            删除
           </AppButton>
         </template>
-      </EventForm>
+      </EventFormPanel>
     </AppModal>
 
     <!-- 删除确认 -->

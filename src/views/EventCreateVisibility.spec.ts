@@ -112,7 +112,7 @@ describe('新增事件后立即可见', () => {
     uiStore.openEventForm()
     await flush()
 
-    const form = wrapper.findComponent({ name: 'EventForm' })
+    const form = wrapper.findComponent({ name: 'EventFormPanel' })
     expect(form.exists()).toBe(true)
 
     // 标题
@@ -151,7 +151,7 @@ describe('新增事件后立即可见', () => {
     uiStore.openEventForm()
     await flush()
 
-    const form = wrapper.findComponent({ name: 'EventForm' })
+    const form = wrapper.findComponent({ name: 'EventFormPanel' })
     await form.find('#event-title').setValue('上大学')
 
     const picker = form.findComponent({ name: 'PrecisionDatePicker' })

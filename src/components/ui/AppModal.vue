@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useId, watch } from 'vue'
+import { useId, onBeforeUnmount, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 
 /**
@@ -37,6 +37,10 @@ watch(
     document.body.style.overflow = open ? 'hidden' : ''
   },
 )
+
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') document.body.style.overflow = ''
+})
 
 const sizeClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' } as const
 </script>

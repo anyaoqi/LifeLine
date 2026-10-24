@@ -1,31 +1,12 @@
 <script setup lang="ts">
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView } from 'vue-router'
 import AppHeader from '@/app/AppHeader.vue'
 import MobileTabBar from '@/app/MobileTabBar.vue'
 import ToastHost from '@/components/ui/ToastHost.vue'
-import AppModal from '@/components/common/AppModal.vue'
-import EventForm from '@/components/EventForm/EventForm.vue'
-import { useUiStore } from '@/stores/uiStore'
+import QuickCapture from '@/components/event/QuickCapture.vue'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 
-const uiStore = useUiStore()
-const router = useRouter()
-
 useGlobalShortcuts()
-
-async function onFormSaved() {
-  uiStore.closeEventForm()
-  // 等待弹窗关闭动画完成后再跳转,避免与路由过渡冲突导致新页面不渲染
-  await new Promise(resolve => setTimeout(resolve, 50))
-  // 从统计/档案等页面记录后回到时间线;时间线本身就在当前页
-  if (!['/', '/timeline'].includes(router.currentRoute.value.path)) {
-    await router.replace('/')
-  }
-}
-
-function onFormCancel() {
-  uiStore.closeEventForm()
-}
 </script>
 
 <template>
@@ -49,20 +30,8 @@ function onFormCancel() {
     <MobileTabBar />
     <ToastHost />
 
-    <!-- 全局记录弹窗(P4 将替换为 QuickCapture 快速记录) -->
-    <AppModal
-      :model-value="uiStore.showEventForm"
-      title="添加事件"
-      max-width="max-w-lg"
-      @update:model-value="(v: boolean) => { if (!v) uiStore.closeEventForm() }"
-      @close="onFormCancel"
-    >
-      <EventForm
-        :existing="null"
-        @saved="onFormSaved"
-        @cancel="onFormCancel"
-      />
-    </AppModal>
+    <!-- 全局快速记录:任何页面可唤起,支持连续添加 -->
+    <QuickCapture />
   </div>
 </template>
 
