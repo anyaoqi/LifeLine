@@ -254,13 +254,18 @@ export function useVirtualTimeline(
   }
 
   // ============ 渲染后回填卡片高度 ============
-  let measureFrame: number | null = null
+  // rAF 对齐绘制帧;setTimeout 兜底 —— 后台标签页 rAF 冻结时测量仍会执行,
+  // 否则布局永远停留在估算值,卡片间距虚大。
+  let measureScheduled = false
   function scheduleMeasure() {
-    if (measureFrame !== null) return
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = null
+    if (measureScheduled) return
+    measureScheduled = true
+    const run = () => {
+      measureScheduled = false
       collectMeasurements()
-    })
+    }
+    requestAnimationFrame(run)
+    setTimeout(run, 90)
   }
 
   function collectMeasurements() {

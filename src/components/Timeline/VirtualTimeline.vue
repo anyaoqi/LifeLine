@@ -82,9 +82,18 @@ function nodeColor(event: LifeEvent): string {
   return getCategory(event.category).color
 }
 
+// ============ 入场动画:同一卡片只播放一次(滚动重挂载不再重放) ============
+const animatedIds = new Set<string>()
+function enterClassFor(id: string): string {
+  if (animatedIds.has(id)) return ''
+  animatedIds.add(id)
+  return 'tl-enter'
+}
+
 // ============ 生命周期 ============
 let resizeObserver: ResizeObserver | null = null
 let measureFrame: number | null = null
+let measureTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(() => {
   measureContainer()
@@ -109,6 +118,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   resizeObserver?.disconnect()
   if (measureFrame !== null) cancelAnimationFrame(measureFrame)
+  if (measureTimer !== null) clearTimeout(measureTimer)
 })
 
 // 数据/筛选变化后:重测容器位置并回填高度
@@ -119,9 +129,10 @@ watch(
     scheduleMeasure()
   },
 )
-// 新分组进入视口后补测高度
+// 视口内渲染集合变化(新分组或同组边缘卡进出场)后补测高度。
+// 注意按事件 id 观测:在同一年份组内滚动时年份串不变,但渲染集合会变。
 watch(
-  () => visibleGroups.value.map(g => g.year).join(','),
+  () => visibleGroups.value.map(g => g.items.map(i => i.event.id).join(',')).join('|'),
   () => scheduleMeasure(),
 )
 
@@ -345,8 +356,8 @@ function onKeydown(e: KeyboardEvent) {
           <div class="tl-card-wrap" :style="{ top: `${item.top - group.top}px` }">
             <div
               :data-event-id="item.event.id"
-              class="tl-enter outline-none"
-              :style="{ '--enter-delay': `${Math.min(item.index * 45, 320)}ms` }"
+              :class="[enterClassFor(item.event.id), 'outline-none']"
+              :style="{ '--enter-delay': `${Math.min(item.index * 40, 260)}ms` }"
             >
               <EventCard
                 :event="item.event"
@@ -612,8 +623,8 @@ function onKeydown(e: KeyboardEvent) {
 }
 @keyframes tl-settle {
   from {
-    opacity: 0;
-    transform: translateY(14px) rotate(0.4deg);
+    opacity: 0.25;
+    transform: translateY(10px) rotate(0.3deg);
   }
   to {
     opacity: 1;
