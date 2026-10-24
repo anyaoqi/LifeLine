@@ -54,6 +54,12 @@ export interface LifeEvent {
   importance: Importance;          // 重要程度（v0.4.0，旧数据默认 3）
   description?: string;            // 事件描述
   category: EventCategory;         // 事件分类
+  // ============ 内容丰富字段（v0.6.0，旧数据无此字段） ============
+  location?: string;               // 地点
+  participants?: string[];         // 参与人
+  mood?: string;                   // 心情标签（自由文本）
+  coverImageId?: string;           // 封面图（images 表 Blob 的 id）
+  isDraft?: boolean;               // 模板生成的草稿（待确认）
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;              // 软删除时间（v0.4.0，支撑 30 秒撤销）

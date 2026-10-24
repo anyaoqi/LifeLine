@@ -1,129 +1,151 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { CATEGORIES, EVENT_TYPES } from '@/utils/constants'
+import { ref, watch } from 'vue'
+import { Search, X } from 'lucide-vue-next'
+import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+import Chip from '@/components/ui/Chip.vue'
+import { CATEGORIES } from '@/utils/constants'
 import { useEventStore } from '@/stores/eventStore'
+import { useUiStore } from '@/stores/uiStore'
+import type { EventType } from '@/types'
 
+/** 时间线筛选:搜索(可被 / 快捷键聚焦)+ 分类 + 形态 + 密度(纪念册/只看大事) */
 const eventStore = useEventStore()
+const uiStore = useUiStore()
 
-const keyword = computed({
-  get: () => eventStore.searchKeyword,
-  set: (v: string) => eventStore.setKeyword(v),
-})
+const searchRef = ref<HTMLInputElement | null>(null)
+const keyword = ref(eventStore.searchKeyword)
 
-function isCategoryActive(key: string): boolean {
-  return eventStore.activeCategories.has(key as never)
+watch(keyword, value => eventStore.setKeyword(value))
+
+// 头部搜索按钮 / 「/」快捷键 → 聚焦本输入框
+watch(
+  () => uiStore.searchFocusSeq,
+  () => {
+    searchRef.value?.focus()
+    searchRef.value?.select()
+  },
+)
+
+const typeValue = ref('all')
+const typeOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'point', label: '● 时间点' },
+  { value: 'period', label: '▮ 区间' },
+]
+
+function onTypeChange(value: string | number) {
+  const set = new Set<EventType>()
+  if (value === 'point' || value === 'period') set.add(value as EventType)
+  eventStore.activeTypes = set
 }
 
-function toggleCategory(key: string) {
-  eventStore.toggleCategory(key as never)
+function clearAll() {
+  keyword.value = ''
+  typeValue.value = 'all'
+  eventStore.clearFilters()
 }
 
-function isTypeActive(key: string): boolean {
-  return eventStore.activeTypes.has(key as never)
-}
-
-function toggleType(key: string) {
-  eventStore.toggleType(key as never)
-}
-
-const onlyBigEvents = computed({
-  get: () => eventStore.onlyBigEvents,
-  set: (value: boolean) => eventStore.setOnlyBigEvents(value),
+defineExpose({
+  focus: () => searchRef.value?.focus(),
 })
 </script>
 
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6 animate-fade-in">
-    <!-- 搜索框 -->
+  <div>
+    <!-- 搜索行 -->
     <div class="relative">
-      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
-        🔍
-      </span>
+      <Search
+        :size="15"
+        class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-app-ink-faint"
+      />
       <input
+        ref="searchRef"
+        id="timeline-search"
         v-model="keyword"
         type="text"
-        class="input-base pl-9 pr-9"
-        placeholder="搜索事件标题或描述…"
-        aria-label="搜索事件"
+        placeholder="搜索人生记录…(快捷键 /)"
+        class="tl-search"
       />
       <button
         v-if="keyword"
         type="button"
-        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-        title="清除搜索"
-        aria-label="清除搜索"
+        class="absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-app-ink-faint transition-colors hover:bg-app-bg-deep hover:text-app-ink"
+        aria-label="清空搜索"
         @click="keyword = ''"
       >
-        ✕
+        <X :size="13" />
       </button>
     </div>
 
-    <!-- 快捷筛选：大事与事件形态 -->
-    <div class="mt-3 flex flex-wrap items-center gap-2">
-      <label
-        class="inline-flex cursor-pointer items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition-all"
-        :class="onlyBigEvents
-          ? 'border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-200'
-          : 'border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300'"
-      >
-        <input v-model="onlyBigEvents" type="checkbox" class="rounded border-gray-300 text-primary-500 focus:ring-primary-400" />
-        ★ 只看大事
-      </label>
-      <span class="text-xs text-gray-400">形态：</span>
-      <button
-        v-for="eventType in EVENT_TYPES"
-        :key="eventType.key"
-        type="button"
-        :title="eventType.hint"
-        :class="[
-          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
-          isTypeActive(eventType.key)
-            ? 'border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-200'
-            : 'border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
-        ]"
-        @click="toggleType(eventType.key)"
-      >
-        <span>{{ eventType.icon }}</span>{{ eventType.label }}
-      </button>
-    </div>
-
-    <!-- 分类 chips -->
-    <div class="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-      <span class="text-xs text-gray-400 flex-shrink-0">分类：</span>
-      <button
+    <!-- 筛选行 -->
+    <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <Chip
         v-for="cat in CATEGORIES"
         :key="cat.key"
-        type="button"
-        :class="[
-          'flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-          isCategoryActive(cat.key)
-            ? 'text-white border-transparent shadow-sm'
-            : 'text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700',
-        ]"
-        :style="isCategoryActive(cat.key) ? { backgroundColor: cat.color } : undefined"
-        @click="toggleCategory(cat.key)"
+        :selected="eventStore.activeCategories.has(cat.key)"
+        :color="cat.color"
+        @click="eventStore.toggleCategory(cat.key)"
       >
-        <span>{{ cat.emoji }}</span>
-        <span>{{ cat.label }}</span>
-      </button>
+        {{ cat.label }}
+      </Chip>
 
-      <!-- 清除筛选 -->
-      <button
-        v-if="eventStore.isFiltering"
-        type="button"
-        class="flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium text-gray-400 hover:text-red-500 transition-colors"
-        @click="eventStore.clearFilters()"
-      >
-        ✕ 清除筛选
-      </button>
+      <span class="mx-1 hidden h-4 w-px bg-app-border sm:block" />
+
+      <div class="ml-auto flex items-center gap-1.5">
+        <SegmentedControl
+          v-model="typeValue"
+          :options="typeOptions"
+          size="sm"
+          @update:model-value="onTypeChange"
+        />
+
+        <!-- 密度:纪念册 / 只看大事 -->
+        <button
+          type="button"
+          :class="[
+            'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all',
+            eventStore.onlyBigEvents
+              ? 'border-app-accent bg-app-accent-soft text-app-accent'
+              : 'border-app-border bg-app-surface text-app-ink-soft hover:border-app-border-strong',
+          ]"
+          :title="eventStore.onlyBigEvents ? '当前只展示大事,点击恢复完整纪念册' : '只看大事与里程碑'"
+          :aria-pressed="eventStore.onlyBigEvents"
+          @click="eventStore.setOnlyBigEvents(!eventStore.onlyBigEvents)"
+        >
+          {{ eventStore.onlyBigEvents ? '只看大事' : '纪念册' }}
+        </button>
+
+        <button
+          v-if="eventStore.isFiltering"
+          type="button"
+          class="inline-flex h-7 items-center gap-1 rounded-full px-2 text-xs text-app-ink-faint transition-colors hover:text-app-ink"
+          @click="clearAll"
+        >
+          <X :size="12" /> 清除
+        </button>
+      </div>
     </div>
-
-    <!-- 筛选结果计数 -->
-    <p
-      v-if="eventStore.isFiltering"
-      class="mt-2 text-xs text-gray-400"
-    >
-      匹配 {{ eventStore.filteredCount }} / {{ eventStore.totalCount }} 个事件
-    </p>
   </div>
 </template>
+
+<style scoped>
+.tl-search {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--app-border);
+  background-color: var(--app-surface);
+  color: var(--app-ink);
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.tl-search::placeholder {
+  color: var(--app-ink-faint);
+}
+.tl-search:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-soft);
+}
+</style>

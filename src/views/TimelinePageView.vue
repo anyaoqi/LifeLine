@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import TimelineView from '@/components/Timeline/TimelineView.vue'
+import { computed, onMounted, ref } from 'vue'
+import { Camera } from 'lucide-vue-next'
+import VirtualTimeline from '@/components/Timeline/VirtualTimeline.vue'
 import TimelineFilter from '@/components/Timeline/TimelineFilter.vue'
-import DeleteUndoToast from '@/components/Timeline/DeleteUndoToast.vue'
 import EventForm from '@/components/EventForm/EventForm.vue'
 import EventDeleteConfirm from '@/components/EventForm/EventDeleteConfirm.vue'
 import AppModal from '@/components/common/AppModal.vue'
@@ -10,6 +10,7 @@ import AppButton from '@/components/common/AppButton.vue'
 import { useEventStore } from '@/stores/eventStore'
 import { useUserStore } from '@/stores/userStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useToast } from '@/composables/useToast'
 import { exportNodeToImage, buildExportFilename } from '@/services/exportService'
 import { UNDO_DELETE_WINDOW_MS } from '@/utils/constants'
 import type { LifeEvent } from '@/types'
@@ -17,27 +18,29 @@ import type { LifeEvent } from '@/types'
 const eventStore = useEventStore()
 const userStore = useUserStore()
 const uiStore = useUiStore()
+const toast = useToast()
 
 onMounted(() => {
   void eventStore.loadEvents()
 })
 
-// 编辑事件弹窗（本页专用，新增走全局）
+// ============ 页头统计 ============
+const yearSpan = computed(() => {
+  const sorted = eventStore.sortedEvents
+  if (sorted.length === 0) return ''
+  const first = new Date(sorted[0].date).getFullYear()
+  const last = new Date(sorted[sorted.length - 1].date).getFullYear()
+  return first === last ? `${first} 年` : `${first} – ${last} 年`
+})
+
+// ============ 编辑弹窗(新增走全局) ============
 const editFormOpen = ref(false)
 const editingEvent = ref<LifeEvent | null>(null)
 
-// 删除确认状态
+// ============ 删除确认 + 撤销 ============
 const deleteOpen = ref(false)
 const deletingEvent = ref<LifeEvent | null>(null)
-
-// 导出图片状态
-const exportArea = ref<HTMLElement | null>(null)
-const exporting = ref(false)
-const exportError = ref<string | null>(null)
-
-function openAdd() {
-  uiStore.openEventForm()
-}
+let undoTimer: ReturnType<typeof setTimeout> | null = null
 
 function onEdit(event: LifeEvent) {
   editingEvent.value = event
@@ -60,35 +63,48 @@ function onDelete(event: LifeEvent) {
 }
 
 async function confirmDelete() {
-  if (deletingEvent.value) {
-    await eventStore.deleteEvent(deletingEvent.value.id)
-  }
+  const target = deletingEvent.value
   deleteOpen.value = false
   deletingEvent.value = null
-}
-
-// 撤销最近一次删除：store 恢复数据后 recentlyDeleted 置空，提示自动消失
-async function onUndoDelete() {
+  if (!target) return
   try {
-    await eventStore.undoDelete()
+    await eventStore.deleteEvent(target.id)
+    if (undoTimer) clearTimeout(undoTimer)
+    const toastId = toast.withAction(
+      `已删除「${target.title}」`,
+      {
+        label: '撤销',
+        handler: () => {
+          if (undoTimer) clearTimeout(undoTimer)
+          void eventStore.undoDelete().catch(() => {})
+        },
+      },
+    )
+    undoTimer = setTimeout(() => {
+      eventStore.dismissRecentlyDeleted()
+      toast.dismiss(toastId)
+    }, UNDO_DELETE_WINDOW_MS)
   } catch {
-    // 失败信息已记录在 store.error，由现有错误展示路径处理
+    toast.error(eventStore.error ?? '删除失败,请重试')
   }
 }
+
+// ============ 导出当前视图 ============
+const exportArea = ref<HTMLElement | null>(null)
+const exporting = ref(false)
 
 async function handleExport() {
   if (!exportArea.value || exporting.value) return
   exporting.value = true
-  exportError.value = null
   try {
     await exportNodeToImage(exportArea.value, {
       filename: buildExportFilename(userStore.user, 'timeline'),
       format: 'png',
       pixelRatio: 2,
     })
+    toast.success('已导出当前视图')
   } catch (err) {
-    exportError.value = err instanceof Error ? err.message : '导出失败，请重试'
-    setTimeout(() => { exportError.value = null }, 3000)
+    toast.error(err instanceof Error ? err.message : '导出失败,请重试')
   } finally {
     exporting.value = false
   }
@@ -96,60 +112,62 @@ async function handleExport() {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto animate-fade-in">
-    <!-- 可导出区域 -->
+  <div class="mx-auto w-full max-w-6xl animate-fade-in">
     <div ref="exportArea">
       <!-- 页头 -->
-      <div class="px-4 sm:px-6 pt-8 pb-2 flex items-start justify-between gap-4">
+      <header class="flex items-end justify-between gap-4 px-4 pb-4 pt-8 sm:px-6">
         <div>
-          <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">
-            我的人生时间线
+          <p class="text-[10px] font-medium tracking-[0.35em] text-app-accent">
+            MY LIFE TIMELINE
+          </p>
+          <h1 class="mt-1.5 font-display text-3xl font-bold text-app-ink">
+            我的人生
           </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            每一个节点都是你人生的一部分 ✨
+          <p class="mt-1 text-sm text-app-ink-soft">
+            {{ eventStore.totalCount }} 条记录<template v-if="yearSpan"> · {{ yearSpan }}</template>
           </p>
         </div>
-
         <AppButton
           v-if="eventStore.totalCount > 0"
           variant="ghost"
           size="sm"
-          class="flex-shrink-0 mt-1"
+          class="flex-shrink-0"
           :disabled="exporting"
           :title="exporting ? '正在生成图片…' : '导出时间线为图片'"
           @click="handleExport"
         >
-          <span v-if="exporting" class="animate-pulse">⏳ 导出中…</span>
-          <span v-else>📷 导出图片</span>
+          <Camera :size="15" />
+          {{ exporting ? '导出中…' : '导出图片' }}
         </AppButton>
-      </div>
+      </header>
 
-      <div
-        v-if="exportError"
-        class="mx-4 sm:mx-6 mt-2 px-3 py-2 rounded-md bg-red-50 dark:bg-red-900/20 text-sm text-red-600 dark:text-red-400"
-      >
-        ⚠️ {{ exportError }}
-      </div>
-
-      <div v-if="eventStore.totalCount > 0" class="px-4 sm:px-6 mt-4">
+      <!-- 筛选 -->
+      <div v-if="eventStore.totalCount > 0" class="px-4 pb-4 sm:px-6">
         <TimelineFilter />
       </div>
 
-      <TimelineView @add="openAdd" @edit="onEdit" @delete="onDelete" />
+      <!-- 时间线 -->
+      <VirtualTimeline
+        @add="uiStore.openEventForm()"
+        @edit="onEdit"
+        @delete="onDelete"
+      />
     </div>
 
-    <!-- 浮动添加按钮 -->
+    <!-- 浮动记录按钮 -->
     <button
       type="button"
-      class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary-400 hover:bg-primary-500 text-white text-2xl shadow-warm flex items-center justify-center transition-all hover:scale-105 active:scale-95 z-30"
+      class="fixed bottom-20 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-app-accent text-white shadow-warm transition-all hover:brightness-95 active:scale-95 md:bottom-6 md:right-6"
       title="添加事件"
       aria-label="添加事件"
-      @click="openAdd"
+      @click="uiStore.openEventForm()"
     >
-      ＋
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
     </button>
 
-    <!-- 编辑事件弹窗（本页专用） -->
+    <!-- 编辑事件弹窗 -->
     <AppModal
       v-model="editFormOpen"
       title="编辑事件"
@@ -173,15 +191,6 @@ async function handleExport() {
         </template>
       </EventForm>
     </AppModal>
-
-    <!-- 删除撤销提示（30 秒窗口） -->
-    <DeleteUndoToast
-      v-if="eventStore.recentlyDeleted"
-      :title="eventStore.recentlyDeleted.title"
-      :window-ms="UNDO_DELETE_WINDOW_MS"
-      @undo="onUndoDelete"
-      @dismiss="eventStore.dismissRecentlyDeleted()"
-    />
 
     <!-- 删除确认 -->
     <AppModal v-model="deleteOpen" title="删除事件" max-width="max-w-md">
