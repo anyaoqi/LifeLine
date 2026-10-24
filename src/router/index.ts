@@ -15,6 +15,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresUser: true },
   },
   {
+    path: '/list',
+    name: 'list',
+    component: () => import('@/views/ListPageView.vue'),
+    meta: { requiresUser: true },
+  },
+  {
     path: '/stats',
     name: 'stats',
     component: () => import('@/views/StatsView.vue'),

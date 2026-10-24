@@ -9,6 +9,12 @@ export const useUiStore = defineStore('ui', () => {
   const theme = ref<Theme>('light');
   // 全局事件表单弹窗状态：任何页面均可直接打开，保存后跳转时间线。
   const showEventForm = ref(false);
+  // 搜索聚焦请求序号：头部搜索按钮 / 「/」快捷键递增,时间线页 watch 它聚焦搜索框
+  const searchFocusSeq = ref(0);
+
+  function requestSearchFocus() {
+    searchFocusSeq.value++;
+  }
 
   // 最终是否应用深色模式（只有浅色 / 深色两态）
   const isDark = computed(() => theme.value === 'dark');
@@ -63,6 +69,7 @@ export const useUiStore = defineStore('ui', () => {
   return {
     theme,
     showEventForm,
+    searchFocusSeq,
     isDark,
     setTheme,
     toggleTheme,
@@ -70,6 +77,7 @@ export const useUiStore = defineStore('ui', () => {
     applyTheme,
     openEventForm,
     closeEventForm,
+    requestSearchFocus,
     clearLocalData,
   };
 });

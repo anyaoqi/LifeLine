@@ -1,19 +1,25 @@
 <script setup lang="ts">
 import { RouterView, useRouter } from 'vue-router'
-import AppHeader from '@/components/common/AppHeader.vue'
+import AppHeader from '@/app/AppHeader.vue'
+import MobileTabBar from '@/app/MobileTabBar.vue'
+import ToastHost from '@/components/ui/ToastHost.vue'
 import AppModal from '@/components/common/AppModal.vue'
 import EventForm from '@/components/EventForm/EventForm.vue'
 import { useUiStore } from '@/stores/uiStore'
+import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 
 const uiStore = useUiStore()
 const router = useRouter()
 
+useGlobalShortcuts()
+
 async function onFormSaved() {
   uiStore.closeEventForm()
-  // 等待弹窗关闭动画完成后再跳转，避免与路由过渡冲突导致新页面不渲染
+  // 等待弹窗关闭动画完成后再跳转,避免与路由过渡冲突导致新页面不渲染
   await new Promise(resolve => setTimeout(resolve, 50))
-  if (router.currentRoute.value.path !== '/timeline') {
-    await router.replace('/timeline')
+  // 从统计/档案等页面记录后回到时间线;时间线本身就在当前页
+  if (!['/', '/timeline'].includes(router.currentRoute.value.path)) {
+    await router.replace('/')
   }
 }
 
@@ -23,10 +29,10 @@ function onFormCancel() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+  <div class="flex min-h-screen flex-col bg-app-bg text-app-ink">
     <AppHeader />
 
-    <main class="flex-1">
+    <main class="flex-1 pb-20 md:pb-0">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="page">
           <component :is="Component" :key="viewRoute.path" />
@@ -34,13 +40,16 @@ function onFormCancel() {
       </RouterView>
     </main>
 
-    <footer class="border-t border-gray-200 dark:border-gray-700 py-6 mt-auto">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6 text-center text-xs text-gray-400">
-        Life-Point · 人生时间线 — 记录生活，反思人生 ✨
-      </div>
+    <footer class="mt-auto hidden border-t border-app-border py-6 md:block">
+      <p class="text-center text-xs text-app-ink-faint">
+        LifePoint · 人生纪念册 — 把值得记住的时刻留在纸上
+      </p>
     </footer>
 
-    <!-- 全局添加事件弹窗：任何页面均可触发，保存后跳转时间线 -->
+    <MobileTabBar />
+    <ToastHost />
+
+    <!-- 全局记录弹窗(P4 将替换为 QuickCapture 快速记录) -->
     <AppModal
       :model-value="uiStore.showEventForm"
       title="添加事件"

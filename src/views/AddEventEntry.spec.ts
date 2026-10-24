@@ -62,18 +62,17 @@ describe('全站「添加事件」入口（全局弹窗）', () => {
     expect(dialogTitles()).toContain('添加事件')
   })
 
-  it('从首页快捷区域点击添加事件同样弹出新增表单', async () => {
+  it('从时间线浮动按钮点击添加事件同样弹出新增表单', async () => {
     wrapper = mount(App, {
       global: { plugins: [router] },
       attachTo: document.body,
     })
     await flush()
 
-    const homeAddButton = wrapper
-      .findAll('button')
-      .find(button => button.text().includes('添加事件'))
-    expect(homeAddButton).toBeDefined()
-    await homeAddButton!.trigger('click')
+    // 已建档用户访问 / 即时间线;除头部「记录」外还有页面级浮动按钮
+    const addButtons = wrapper.findAll('button[title="添加事件"]')
+    expect(addButtons.length).toBeGreaterThan(1)
+    await addButtons[addButtons.length - 1].trigger('click')
     await flush()
 
     expect(dialogTitles()).toContain('添加事件')

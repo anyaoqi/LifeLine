@@ -162,11 +162,7 @@ describe('新增事件后立即可见', () => {
     await flush(12)
 
     expect(eventStore.totalCount).toBe(1)
-    // App.vue 保存后会等 50ms 弹窗关闭动画再跳转（宏任务），flushPromises 只清微任务，
-    // 慢机器上断言时导航尚未完成 —— 轮询等待路由就绪，不假设时序。
-    await vi.waitFor(() => {
-      expect(router.currentRoute.value.path).toBe('/timeline')
-    })
+    // v0.6.0 起时间线就是首页「/」:保存后无需再跳转 /timeline,停留在当前页即可
     await vi.waitFor(() => {
       expect(document.body.textContent).toContain('上大学')
     })
