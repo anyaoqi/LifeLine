@@ -286,10 +286,8 @@ function onKeydown(e: KeyboardEvent) {
           <span class="font-display">生</span>
         </div>
         <div class="absolute top-1/2 -translate-y-1/2" style="left: 54px">
-          <p class="text-[10px] uppercase tracking-[0.25em] text-app-ink-faint">Origin</p>
-          <p class="mt-0.5 font-display text-sm font-semibold text-app-ink">
-            {{ birthLabel }} · 出生
-          </p>
+          <p class="font-display text-base font-semibold text-app-ink">{{ birthLabel }}</p>
+          <p class="mt-0.5 text-xs text-app-ink-soft">人生的起点</p>
         </div>
       </div>
 
@@ -300,13 +298,19 @@ function onKeydown(e: KeyboardEvent) {
         class="absolute inset-x-0"
         :style="{ top: `${group.top}px`, height: `${group.height}px` }"
       >
+        <!-- 年份幽灵水印:纸面上的大字衬线数字 -->
+        <div class="tl-year-ghost font-display" aria-hidden="true">{{ group.year }}</div>
+
         <!-- 吸顶年份标题 -->
         <div
           class="tl-year-title"
           :class="{ 'tl-year-title--active': group.year === activeYear }"
           :style="{ top: `${YEAR_TITLE_H - 58}px` }"
-        >          <span class="font-display">{{ group.year }}</span>
-          <span class="tl-year-count">{{ group.items.length }}</span>
+        >
+          <i class="tl-year-line" aria-hidden="true" />
+          <span class="font-display">{{ group.year }}</span>
+          <i class="tl-year-line" aria-hidden="true" />
+          <span class="tl-year-count">{{ group.items.length }} 条</span>
         </div>
 
         <!-- 事件卡片 -->
@@ -341,7 +345,8 @@ function onKeydown(e: KeyboardEvent) {
           <div class="tl-card-wrap" :style="{ top: `${item.top - group.top}px` }">
             <div
               :data-event-id="item.event.id"
-              class="outline-none"
+              class="tl-enter outline-none"
+              :style="{ '--enter-delay': `${Math.min(item.index * 45, 320)}ms` }"
             >
               <EventCard
                 :event="item.event"
@@ -362,7 +367,9 @@ function onKeydown(e: KeyboardEvent) {
         :style="{ top: `${totalHeight - END_SECTION_H}px`, height: `${END_SECTION_H}px` }"
       >
         <div class="tl-node tl-node--now" style="top: 38%">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-app-accent" />
+          <span class="tl-ripple" aria-hidden="true" />
+          <span class="tl-ripple tl-ripple--delay" aria-hidden="true" />
+          <span class="tl-now-dot" aria-hidden="true" />
         </div>
         <div class="absolute top-[30%]" style="left: 54px">
           <p class="font-display text-sm font-semibold text-app-ink">现在</p>
@@ -376,9 +383,10 @@ function onKeydown(e: KeyboardEvent) {
 <style scoped>
 .tl-root {
   --axis-x: 28px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* 中心轴 */
+/* ============ 中心轴:墨迹,挂载时自上而下画出 ============ */
 .tl-axis {
   position: absolute;
   top: 0;
@@ -389,11 +397,17 @@ function onKeydown(e: KeyboardEvent) {
   background: linear-gradient(
     to bottom,
     transparent,
-    color-mix(in srgb, var(--app-accent) 55%, transparent) 72px,
-    color-mix(in srgb, var(--app-accent) 55%, transparent) calc(100% - 80px),
+    color-mix(in srgb, var(--app-accent) 60%, transparent) 72px,
+    color-mix(in srgb, var(--app-accent) 60%, transparent) calc(100% - 80px),
     transparent
   );
   z-index: 1;
+  transform-origin: top;
+  animation: tl-axis-draw 0.9s var(--ease-out) both;
+}
+@keyframes tl-axis-draw {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
 }
 
 @media (min-width: 768px) {
@@ -402,7 +416,7 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/* 节点 */
+/* ============ 节点 ============ */
 .tl-node {
   position: absolute;
   left: var(--axis-x);
@@ -413,14 +427,28 @@ function onKeydown(e: KeyboardEvent) {
   border-radius: 50%;
   z-index: 3;
   box-shadow: 0 0 0 3px var(--app-bg);
+  transition: transform 0.25s var(--ease-out);
+}
+.tl-item:hover .tl-node {
+  transform: translate(-50%, -50%) scale(1.35);
 }
 
 .tl-node--period {
   border: 3px solid var(--node-color);
+  background-color: var(--app-bg) !important;
 }
 
-.tl-node--milestone {
-  box-shadow: 0 0 0 3px var(--app-bg), 0 0 14px var(--node-glow);
+/* 里程碑:外圈虚线环缓慢旋转(仅 transform,单实例量级) */
+.tl-node--milestone::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1.5px dashed color-mix(in srgb, var(--node-color) 65%, transparent);
+  animation: tl-spin 26s linear infinite;
+}
+@keyframes tl-spin {
+  to { transform: rotate(360deg); }
 }
 
 .tl-node--birth {
@@ -433,8 +461,10 @@ function onKeydown(e: KeyboardEvent) {
   justify-content: center;
   font-size: 15px;
   font-weight: 600;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 18%, transparent);
 }
 
+/* 「现在」:呼吸涟漪双环 */
 .tl-node--now {
   width: 18px;
   height: 18px;
@@ -444,8 +474,29 @@ function onKeydown(e: KeyboardEvent) {
   align-items: center;
   justify-content: center;
 }
+.tl-now-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--app-accent);
+}
+.tl-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1.5px solid var(--app-accent);
+  animation: tl-ripple 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.tl-ripple--delay {
+  animation-delay: 1.4s;
+}
+@keyframes tl-ripple {
+  0% { transform: scale(1); opacity: 0.55; }
+  70% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
 
-/* 年份导航尺 */
+/* ============ 年份导航尺:粘性横条 ============ */
 .tl-year-rail {
   position: sticky;
   z-index: 6;
@@ -475,7 +526,7 @@ function onKeydown(e: KeyboardEvent) {
   color: var(--app-ink-soft);
   background: var(--app-surface);
   border: 1px solid var(--app-border);
-  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, transform 0.15s var(--ease-out);
 }
 .tl-year-chip span {
   font-size: 10px;
@@ -485,6 +536,7 @@ function onKeydown(e: KeyboardEvent) {
 .tl-year-chip:hover {
   color: var(--app-accent);
   border-color: var(--app-accent);
+  transform: translateY(-1px);
 }
 .tl-year-chip--active {
   color: #fff;
@@ -493,27 +545,58 @@ function onKeydown(e: KeyboardEvent) {
   box-shadow: 0 2px 6px rgb(184 131 77 / 0.35);
 }
 
-/* 年份标题:吸顶,衬线大字 */
+/* ============ 年份幽灵水印 ============ */
+.tl-year-ghost {
+  position: absolute;
+  top: -6px;
+  right: 4%;
+  z-index: 0;
+  font-size: clamp(72px, 9vw, 128px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--app-accent) 9%, transparent);
+  pointer-events: none;
+  user-select: none;
+  transition: color 0.4s ease;
+}
+.tl-year-title--active ~ * .tl-year-ghost { color: color-mix(in srgb, var(--app-accent) 14%, transparent); }
+@media (max-width: 767px) {
+  .tl-year-ghost {
+    right: auto;
+    left: 44px;
+  }
+}
+
+/* ============ 年份标题:吸顶,细线 + 衬线年份 ============ */
 .tl-year-title {
   position: sticky;
   top: var(--title-sticky-top, 116px);
   z-index: 5;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0 0.75rem;
-  background: linear-gradient(to bottom, var(--app-bg) 58%, transparent);
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.875rem;
+  background: linear-gradient(to bottom, var(--app-bg) 62%, transparent);
 }
-.tl-year-title > span:first-child {
+.tl-year-line {
+  width: clamp(16px, 6vw, 72px);
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--app-border-strong));
+}
+.tl-year-line:last-of-type {
+  background: linear-gradient(to left, transparent, var(--app-border-strong));
+}
+.tl-year-title > span:first-of-type {
   font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   color: var(--app-ink);
   opacity: 0.85;
-  transition: color 0.2s ease, opacity 0.2s ease;
+  transition: color 0.3s ease, opacity 0.3s ease, text-shadow 0.3s ease;
 }
-.tl-year-title--active > span:first-child {
+.tl-year-title--active > span:first-of-type {
   color: var(--app-accent);
   opacity: 1;
 }
@@ -522,7 +605,23 @@ function onKeydown(e: KeyboardEvent) {
   color: var(--app-ink-faint);
 }
 
-/* 事件项容器 */
+/* ============ 卡片落定:翻册的核心时刻 ============ */
+.tl-enter {
+  animation: tl-settle 0.4s var(--ease-out) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@keyframes tl-settle {
+  from {
+    opacity: 0;
+    transform: translateY(14px) rotate(0.4deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+/* ============ 事件项容器 ============ */
 .tl-item {
   position: absolute;
   left: 0;
@@ -559,7 +658,7 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/* 区间色带 */
+/* ============ 区间色带 ============ */
 .tl-band {
   --band-width: 6px;
   position: absolute;
@@ -567,8 +666,12 @@ function onKeydown(e: KeyboardEvent) {
   width: var(--band-width);
   transform: translateX(-50%);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--band-color) 45%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--band-color) 25%, transparent);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--band-color) 32%, transparent),
+    color-mix(in srgb, var(--band-color) 58%, transparent)
+  );
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--band-color) 22%, transparent);
   z-index: 0;
 }
 .tl-band::before,

@@ -150,13 +150,10 @@ async function handleExport() {
       <!-- 页头 -->
       <header class="flex items-end justify-between gap-4 px-4 pb-4 pt-8 sm:px-6">
         <div>
-          <p class="text-[10px] font-medium tracking-[0.35em] text-app-accent">
-            MY LIFE TIMELINE
-          </p>
-          <h1 class="mt-1.5 font-display text-3xl font-bold text-app-ink">
+          <h1 class="font-display text-3xl font-bold tracking-wide text-app-ink">
             我的人生
           </h1>
-          <p class="mt-1 text-sm text-app-ink-soft">
+          <p class="mt-1.5 text-sm text-app-ink-soft">
             {{ eventStore.totalCount }} 条记录<template v-if="yearSpan"> · {{ yearSpan }}</template>
           </p>
         </div>
