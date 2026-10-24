@@ -1,146 +1,356 @@
-/* 第三方日期选择器基础样式（随后用设计系统的品牌色覆盖）；@import 必须位于文件最前 */
+/* ============================================================
+   Life-Point v0.6.0「纪念册」设计系统
+   Tailwind v4 CSS-first:设计令牌集中在 @theme,语义色经
+   --app-* 运行时变量随 .dark 自动切换,新组件直接用
+   bg-app-surface / text-app-ink 等工具类,无需再写 dark: 变体。
+   ============================================================ */
 @import '@vuepic/vue-datepicker/dist/main.css';
+@import 'tailwindcss';
+@import '@fontsource/noto-serif-sc/400.css';
+@import '@fontsource/noto-serif-sc/600.css';
+@import '@fontsource/noto-serif-sc/700.css';
+@import '@fontsource/noto-serif-sc/900.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* class 策略暗色模式(v4 默认是 prefers-color-scheme) */
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* Custom base styles */
+/* ============ 运行时语义变量:浅色(纸面) / 深色(暖炭) ============ */
+:root {
+  --app-bg: #faf7f2;        /* 纸面 */
+  --app-bg-deep: #f3eee6;   /* 更深一层的纸面(区块底) */
+  --app-surface: #fffdf9;   /* 卡片 */
+  --app-surface-raised: #ffffff;
+  --app-border: #e8e0d5;
+  --app-border-strong: #d9cfc0;
+  --app-ink: #2a2622;       /* 墨色正文 */
+  --app-ink-soft: #6b6259;  /* 次级文字 */
+  --app-ink-faint: #a39b90; /* 弱化文字 */
+  --app-accent: #b8834d;    /* 暖棕强调 */
+  --app-accent-soft: #f4e9d8;
+}
+
+.dark {
+  --app-bg: #191613;
+  --app-bg-deep: #14110e;
+  --app-surface: #211d18;
+  --app-surface-raised: #2a2622;
+  --app-border: #35302a;
+  --app-border-strong: #4a443d;
+  --app-ink: #f0ebe4;
+  --app-ink-soft: #b3a99c;
+  --app-ink-faint: #7d746a;
+  --app-accent: #d6b27e;
+  --app-accent-soft: #33291d;
+}
+
+@theme inline {
+  --color-app-bg: var(--app-bg);
+  --color-app-bg-deep: var(--app-bg-deep);
+  --color-app-surface: var(--app-surface);
+  --color-app-surface-raised: var(--app-surface-raised);
+  --color-app-border: var(--app-border);
+  --color-app-border-strong: var(--app-border-strong);
+  --color-app-ink: var(--app-ink);
+  --color-app-ink-soft: var(--app-ink-soft);
+  --color-app-ink-faint: var(--app-ink-faint);
+  --color-app-accent: var(--app-accent);
+  --color-app-accent-soft: var(--app-accent-soft);
+}
+
+@theme {
+  /* ============ 品牌色:暖棕(400 即强调色,兼容旧 primary-400 用法) ============ */
+  --color-primary-50: #fbf7f0;
+  --color-primary-100: #f4e9d8;
+  --color-primary-200: #e7cfac;
+  --color-primary-300: #d6b27e;
+  --color-primary-400: #b8834d;
+  --color-primary-500: #a9743f;
+  --color-primary-600: #916133;
+  --color-primary-700: #774f2a;
+  --color-primary-800: #5e3f22;
+  --color-primary-900: #47301b;
+
+  /* ============ 中性色:暖灰纸感(覆盖默认 gray) ============ */
+  --color-gray-50: #faf7f2;
+  --color-gray-100: #f3eee6;
+  --color-gray-200: #e8e0d5;
+  --color-gray-300: #d9cfc0;
+  --color-gray-400: #a39b90;
+  --color-gray-500: #7d746a;
+  --color-gray-600: #6b6259;
+  --color-gray-700: #4a443d;
+  --color-gray-800: #2a2622;
+  --color-gray-900: #191613;
+
+  /* ============ 事件分类色:降饱和、与纸面和谐 ============ */
+  --color-category-life: #c9a26b;
+  --color-category-education: #7a93c9;
+  --color-category-work: #85a06b;
+  --color-category-travel: #a388b5;
+  --color-category-love: #d99096;
+  --color-category-health: #c98a6b;
+  --color-category-achievement: #d9b96b;
+  --color-category-other: #9a948a;
+
+  /* ============ 字体 ============ */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', Roboto, sans-serif;
+  --font-display:
+    'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', Georgia,
+    serif;
+
+  /* ============ 字号(沿用 v0.5 阶梯) ============ */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 3rem;
+
+  /* ============ 8px 网格命名间距 ============ */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* ============ 圆角(沿用 v0.5 值) ============ */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  /* ============ 阴影:暖调 ============ */
+  --shadow-sm: 0 1px 2px rgb(42 38 34 / 0.05);
+  --shadow-md: 0 4px 6px rgb(42 38 34 / 0.07);
+  --shadow-lg: 0 10px 15px rgb(42 38 34 / 0.1);
+  --shadow-warm: 0 4px 12px rgb(184 131 77 / 0.18);
+  --shadow-card: 0 1px 3px rgb(42 38 34 / 0.04), 0 4px 16px rgb(42 38 34 / 0.05);
+
+  /* ============ 动效 ============ */
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-slide-in-right: slide-in-right 0.4s ease-out;
+  --animate-slide-in-left: slide-in-left 0.4s ease-out;
+
+  @keyframes fade-in {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  @keyframes slide-up {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes scale-in {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes slide-in-right {
+    0% { opacity: 0; transform: translateX(20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slide-in-left {
+    0% { opacity: 0; transform: translateX(-20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+}
+
+/* ============ 基础层 ============ */
 @layer base {
   html {
-    @apply scroll-smooth;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100;
+    background-color: var(--app-bg);
+    color: var(--app-ink);
+    font-family: var(--font-sans);
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   button {
-    @apply transition-all duration-200;
+    transition: all 0.2s ease;
   }
 
-  /* Smooth scrolling */
   ::-webkit-scrollbar {
-    @apply w-2 h-2;
+    width: 8px;
+    height: 8px;
   }
-
   ::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+    background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    @apply bg-primary-400 dark:bg-primary-600 rounded;
+    background: var(--app-border-strong);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--app-ink-faint);
   }
 
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary-500 dark:bg-primary-500;
+  ::selection {
+    background: var(--app-accent-soft);
+    color: var(--app-ink);
+  }
+
+  /* 统一焦点环(键盘可达性) */
+  :focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 2px;
   }
 }
 
-/* Custom component styles */
+/* ============ 组件层:兼容 v0.5 旧类名(逐步迁移后移除) ============ */
 @layer components {
+  .card-base {
+    background-color: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
   .btn-primary {
-    @apply px-4 py-2 bg-primary-400 text-white rounded-md hover:bg-primary-500 active:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    padding: 0.5rem 1rem;
+    background-color: var(--app-accent);
+    color: #fff;
+    border-radius: var(--radius-md);
+    transition: background-color 0.2s ease, transform 0.15s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(0.95);
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
   }
 
   .btn-secondary {
-    @apply px-4 py-2 border border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--app-border-strong);
+    color: var(--app-ink);
+    border-radius: var(--radius-md);
+    transition: background-color 0.2s ease;
+  }
+  .btn-secondary:hover {
+    background-color: var(--app-bg-deep);
   }
 
   .btn-ghost {
-    @apply px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors;
+    padding: 0.5rem 1rem;
+    color: var(--app-ink-soft);
+    border-radius: var(--radius-md);
+    transition: background-color 0.2s ease;
+  }
+  .btn-ghost:hover {
+    background-color: var(--app-bg-deep);
+    color: var(--app-ink);
   }
 
   .input-base {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 transition-all;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: var(--radius-md);
+    background-color: var(--app-surface-raised);
+    color: var(--app-ink);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-
-  .card-base {
-    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow;
+  .input-base:focus {
+    outline: none;
+    border-color: var(--app-accent);
+    box-shadow: 0 0 0 2px var(--app-accent-soft);
+  }
+  .input-base::placeholder {
+    color: var(--app-ink-faint);
   }
 }
 
-/* ============ 日期选择器主题（对齐设计系统的温暖品牌色） ============ */
+/* ============ 日期选择器主题(对齐暖棕品牌色) ============ */
 .dp__theme_light {
-  --dp-primary-color: #d4a574;
+  --dp-primary-color: #b8834d;
   --dp-primary-text-color: #ffffff;
-  --dp-text-color: #2c2c2c;
+  --dp-text-color: #2a2622;
   --dp-secondary-color: #9b9b9b;
-  --dp-border-color: #d1d5db;
-  --dp-border-color-hover: #d4a574;
-  --dp-hover-color: #f8f2ea;
-  --dp-hover-text-color: #2c2c2c;
+  --dp-border-color: #d9cfc0;
+  --dp-border-color-hover: #b8834d;
+  --dp-hover-color: #f4e9d8;
+  --dp-hover-text-color: #2a2622;
   --dp-icon-color: #9b9b9b;
   --dp-border-radius: 8px;
   --dp-font-family: inherit;
 }
 
 .dp__theme_dark {
-  --dp-background-color: #2d2b2a;
-  --dp-primary-color: #e6c9ab;
-  --dp-primary-text-color: #1a1918;
-  --dp-text-color: #f5f1ed;
-  --dp-secondary-color: #b8b3ad;
-  --dp-border-color: #4b5563;
-  --dp-border-color-hover: #e6c9ab;
-  --dp-hover-color: #3a3735;
-  --dp-hover-text-color: #f5f1ed;
-  --dp-icon-color: #b8b3ad;
+  --dp-background-color: #2a2622;
+  --dp-primary-color: #d6b27e;
+  --dp-primary-text-color: #191613;
+  --dp-text-color: #f0ebe4;
+  --dp-secondary-color: #b3a99c;
+  --dp-border-color: #4a443d;
+  --dp-border-color-hover: #d6b27e;
+  --dp-hover-color: #3a3530;
+  --dp-hover-text-color: #f0ebe4;
+  --dp-icon-color: #b3a99c;
   --dp-border-radius: 8px;
   --dp-font-family: inherit;
 }
 
-/* 日期输入框与项目内 .input-base 视觉保持一致 */
 .lp-datepicker-input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid #d1d5db;
-  background-color: #ffffff;
-  color: #2c2c2c;
+  border-radius: 0.5rem;
+  border: 1px solid var(--app-border-strong);
+  background-color: var(--app-surface-raised);
+  color: var(--app-ink);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-/* 内置图标已隐藏，回收其占位的左内边距，避免 placeholder 被顶开 */
 .lp-datepicker-input.dp__input_icon_pad {
   padding-left: 0.75rem;
 }
 
 .dark .lp-datepicker-input {
-  background-color: #1f2937;
-  border-color: #4b5563;
-  color: #f3f4f6;
+  background-color: var(--app-surface-raised);
+  border-color: var(--app-border-strong);
+  color: var(--app-ink);
 }
 
 .lp-datepicker-input:focus {
   outline: none;
   border-color: transparent;
-  box-shadow: 0 0 0 2px #d4a574;
+  box-shadow: 0 0 0 2px var(--app-accent);
 }
 
 .lp-datepicker-input--invalid {
-  border-color: #f87171;
-  box-shadow: 0 0 0 1px #f87171;
+  border-color: #d97b7b;
+  box-shadow: 0 0 0 1px #d97b7b;
 }
 
-/* 弹层需浮于模态框（z-50）之上 */
 .dp__outer_menu_wrap,
 .dp--menu-wrapper {
   z-index: 60;
 }
 
-/* Custom utilities */
-@layer utilities {
-  .glass {
-    @apply backdrop-blur-md bg-white/30 dark:bg-gray-800/30 border border-white/20 dark:border-gray-700/20;
-  }
-
-  .flex-center {
-    @apply flex items-center justify-center;
-  }
-
-  .transition-smooth {
-    @apply transition-all duration-300 ease-out;
+/* ============ 用户偏好减少动效 ============ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

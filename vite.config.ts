@@ -3,6 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { copyFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 // GitHub Pages 项目站点部署在子路径 /LifeLine/ 下；开发服务器仍从根路径提供。
 // 自定义域名时可设 BASE_PATH=/ 覆盖。
@@ -24,7 +25,7 @@ function spaFallback(): Plugin {
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? basePath : '/',
-  plugins: [vue(), ...(command === 'build' ? [spaFallback()] : [])],
+  plugins: [vue(), tailwindcss(), ...(command === 'build' ? [spaFallback()] : [])],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
