@@ -27,6 +27,7 @@ const emit = defineEmits<{
   edit: [event: LifeEvent]
   delete: [event: LifeEvent]
   confirm: [event: LifeEvent]
+  open: [event: LifeEvent]
 }>()
 
 const eventStore = useEventStore()
@@ -348,6 +349,7 @@ function onKeydown(e: KeyboardEvent) {
                 @edit="emit('edit', $event)"
                 @delete="emit('delete', $event)"
                 @confirm="emit('confirm', $event)"
+                @open="emit('open', $event)"
               />
             </div>
           </div>

@@ -14,7 +14,7 @@ import type { LifeEvent } from '@/types'
  * 高度参与虚拟滚动布局,根元素务必带 data-measure-key。
  */
 const props = defineProps<{ event: LifeEvent; measureKey?: string }>()
-const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent]; confirm: [event: LifeEvent] }>()
+const emit = defineEmits<{ edit: [event: LifeEvent]; delete: [event: LifeEvent]; confirm: [event: LifeEvent]; open: [event: LifeEvent] }>()
 
 const userStore = useUserStore()
 const category = computed(() => getCategory(props.event.category))
@@ -50,6 +50,7 @@ const ageText = computed(() =>
     :style="{ '--cat': category.color }"
     tabindex="0"
     :data-measure-key="measureKey"
+    @click="emit('open', event)"
   >
     <span class="tl-milestone-bar" aria-hidden="true" />
     <div class="flex items-start justify-between gap-2">
@@ -102,6 +103,7 @@ const ageText = computed(() =>
     :class="{ 'tl-minor--draft': event.isDraft }"
     tabindex="0"
     :data-measure-key="measureKey"
+    @click="emit('open', event)"
   >
     <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full" :style="{ backgroundColor: category.color }" />
     <span class="min-w-0 flex-1 truncate text-sm text-app-ink">
@@ -133,6 +135,7 @@ const ageText = computed(() =>
     :style="{ '--cat': category.color }"
     tabindex="0"
     :data-measure-key="measureKey"
+    @click="emit('open', event)"
   >
     <div class="flex items-start justify-between gap-2">
       <h3 class="font-display text-base font-semibold leading-snug text-app-ink">

@@ -7,6 +7,7 @@ import { useUiStore } from '@/stores/uiStore'
 import { useUserStore } from '@/stores/userStore'
 import { useEventStore } from '@/stores/eventStore'
 import { eventService, userService } from '@/services/storageService'
+import { imageService } from '@/services/imageService'
 import { downloadExportJson, importFromFile } from '@/services/exportService'
 import type { Theme } from '@/types'
 
@@ -105,9 +106,13 @@ function cancelImport() {
 }
 
 async function confirmClearAll() {
-  // 删除当前用户的所有事件 + 用户档案，并重置状态
+  // 删除当前用户的所有事件(含配图)+ 用户档案，并重置状态
   if (userStore.userId) {
+    const eventIds = (await eventService.getEventsByUser(userStore.userId)).map(e => e.id)
     await eventService.deleteEventsByUser(userStore.userId)
+    for (const id of eventIds) {
+      await imageService.deleteByEvent(id)
+    }
     await userService.deleteUser(userStore.userId)
   }
   uiStore.clearLocalData()

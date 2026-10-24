@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { ChevronDown, ChevronUp, ImagePlus, X } from 'lucide-vue-next'
+import { imageService, imageUrl, forgetImageUrls } from '@/services/imageService'
+import type { StoredImage } from '@/services/storageService'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -57,7 +59,50 @@ const form = reactive({
   importance: DEFAULT_IMPORTANCE as Importance,
   category: DEFAULT_CATEGORY as EventCategory,
   description: '',
+  location: '',
+  participantsText: '',
+  mood: '',
 })
+
+// ============ 配图暂存 ============
+// 已保存的图(编辑模式从库中加载) + 待上传的新文件 + 标记删除的已有图
+const savedImages = ref<StoredImage[]>([])
+const pendingFiles = ref<{ file: File; url: string }[]>([])
+const removalIds = ref<string[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function onPickFiles(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (files.length === 0) return
+  for (const file of files) {
+    pendingFiles.value.push({ file, url: URL.createObjectURL(file) })
+  }
+  input.value = ''
+}
+
+function removeSavedImage(img: StoredImage) {
+  savedImages.value = savedImages.value.filter(i => i.id !== img.id)
+  if (!removalIds.value.includes(img.id)) removalIds.value.push(img.id)
+}
+
+function removePending(index: number) {
+  const [item] = pendingFiles.value.splice(index, 1)
+  if (item) URL.revokeObjectURL(item.url)
+}
+
+onBeforeUnmount(() => {
+  forgetImageUrls(savedImages.value.map(i => i.id))
+  for (const p of pendingFiles.value) URL.revokeObjectURL(p.url)
+})
+
+async function loadImages(eventId: string) {
+  try {
+    savedImages.value = await imageService.getByEvent(eventId)
+  } catch {
+    savedImages.value = []
+  }
+}
 
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
@@ -95,8 +140,12 @@ watch(
     form.importance = event.importance ?? DEFAULT_IMPORTANCE
     form.category = event.category
     form.description = event.description ?? ''
+    form.location = event.location ?? ''
+    form.participantsText = (event.participants ?? []).join('、')
+    form.mood = event.mood ?? ''
     errors.value = {}
     showDetails.value = true
+    void loadImages(event.id)
   },
   { immediate: true },
 )
@@ -112,7 +161,13 @@ function resetForm() {
   form.importance = DEFAULT_IMPORTANCE
   form.category = DEFAULT_CATEGORY
   form.description = ''
+  form.location = ''
+  form.participantsText = ''
+  form.mood = ''
   errors.value = {}
+  savedImages.value = []
+  pendingFiles.value = []
+  removalIds.value = []
 }
 
 // 点事件没有结束;「至今」与结束日期互斥
@@ -129,6 +184,15 @@ watch(() => form.isOngoing, (isOngoing) => {
     clearError('endDate', 'endDatePrecision')
   }
 })
+
+/** 参与人输入:顿号/逗号/空格分隔 */
+function parseParticipants(text: string): string[] | undefined {
+  const list = text
+    .split(/[、,，\s]+/)
+    .map(t => t.trim())
+    .filter(Boolean)
+  return list.length > 0 ? list : undefined
+}
 
 /** 按精度裁剪为存储值:低精度只保留时间段起点作为排序锚点 */
 function truncateToPrecision(iso: string, precision: DatePrecision): string {
@@ -172,6 +236,9 @@ async function submit(continueAdding = false) {
     importance: form.importance,
     category: form.category,
     description: form.description.trim() || undefined,
+    location: form.location.trim() || undefined,
+    participants: parseParticipants(form.participantsText),
+    mood: form.mood.trim() || undefined,
   }
   const result = validateEvent(input)
   errors.value = result.errors
@@ -179,11 +246,26 @@ async function submit(continueAdding = false) {
 
   submitting.value = true
   try {
+    let savedEvent: LifeEvent | undefined
     if (props.existing) {
-      await eventStore.updateEvent(props.existing.id, input)
+      savedEvent = await eventStore.updateEvent(props.existing.id, input)
     } else {
-      await eventStore.createEvent(input)
+      savedEvent = await eventStore.createEvent(input)
     }
+    // 配图:先删标记移除的,再上传新选的(失败不阻断保存主流程)
+    try {
+      if (removalIds.value.length > 0) await imageService.deleteImages([...removalIds.value])
+      if (pendingFiles.value.length > 0 && savedEvent) {
+        const added = await imageService.addImages(savedEvent.id, pendingFiles.value.map(p => p.file))
+        // 首图设为封面:走 store,避免 db 直写被下一次事件更新覆盖
+        if (added.length > 0 && !savedEvent.coverImageId) {
+          await eventStore.updateEvent(savedEvent.id, { coverImageId: added[0].id })
+        }
+      }
+    } catch { /* 配图失败不阻断保存主流程 */ }
+    for (const p of pendingFiles.value) URL.revokeObjectURL(p.url)
+    pendingFiles.value = []
+    removalIds.value = []
     const shouldContinue = continueAdding && !props.existing
     if (shouldContinue) {
       // 连续添加:保留类型/精度/重要度/分类,只清标题与描述,光标回到标题
@@ -369,6 +451,59 @@ defineExpose({
           {{ form.description.length }} / 500
         </p>
       </div>
+
+      <!-- 地点 / 参与人 / 心情 -->
+      <div class="grid gap-3 sm:grid-cols-3">
+        <label class="block">
+          <span class="mb-1 block text-xs font-medium text-app-ink-soft">地点</span>
+          <input v-model="form.location" type="text" maxlength="50" placeholder="在哪里?" class="ef-mini-input" />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs font-medium text-app-ink-soft">参与人</span>
+          <input v-model="form.participantsText" type="text" maxlength="100" placeholder="和谁一起?" class="ef-mini-input" />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs font-medium text-app-ink-soft">心情</span>
+          <input v-model="form.mood" type="text" maxlength="20" placeholder="如:开心、紧张" class="ef-mini-input" />
+        </label>
+      </div>
+
+      <!-- 配图 -->
+      <div>
+        <div class="mb-1.5 flex items-center justify-between">
+          <span class="text-sm font-medium text-app-ink">照片</span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-app-accent transition-colors hover:bg-app-accent-soft"
+            @click="fileInput?.click()"
+          >
+            <ImagePlus :size="14" /> 添加照片
+          </button>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            @change="onPickFiles"
+          />
+        </div>
+        <div v-if="savedImages.length + pendingFiles.length > 0" class="flex flex-wrap gap-2">
+          <div v-for="img in savedImages" :key="img.id" class="ef-thumb">
+            <img :src="imageUrl(img)" alt="事件配图" />
+            <button type="button" class="ef-thumb-x" aria-label="移除照片" @click="removeSavedImage(img)">
+              <X :size="12" />
+            </button>
+          </div>
+          <div v-for="(p, i) in pendingFiles" :key="p.url" class="ef-thumb">
+            <img :src="p.url" alt="待上传照片" />
+            <button type="button" class="ef-thumb-x" aria-label="移除照片" @click="removePending(i)">
+              <X :size="12" />
+            </button>
+          </div>
+        </div>
+        <p v-else class="text-xs text-app-ink-faint">还没有照片,留白也很好</p>
+      </div>
     </template>
 
     <!-- 快速模式:展开详细信息 -->
@@ -449,6 +584,54 @@ defineExpose({
   font-size: 11px;
   font-weight: 500;
   color: var(--app-accent);
+}
+
+.ef-mini-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-raised);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--app-ink);
+}
+.ef-mini-input:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 2px var(--app-accent-soft);
+}
+.ef-mini-input::placeholder {
+  color: var(--app-ink-faint);
+}
+
+.ef-thumb {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border-radius: 0.625rem;
+  border: 1px solid var(--app-border);
+}
+.ef-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ef-thumb-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: rgb(42 38 34 / 0.65);
+  color: #fff;
+}
+.ef-thumb-x:hover {
+  background: rgb(42 38 34 / 0.85);
 }
 
 .ef-textarea {

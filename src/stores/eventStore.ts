@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { LifeEvent, LifeEventInput, EventCategory, EventType } from '@/types';
-import { BIG_EVENT_THRESHOLD } from '@/utils/constants';
+import { BIG_EVENT_THRESHOLD, UNDO_DELETE_WINDOW_MS } from '@/utils/constants';
 import { eventService } from '@/services/storageService';
+import { imageService } from '@/services/imageService';
 import { applyFilter, hasActiveFilter } from '@/utils/filter';
 import { useUserStore } from './userStore';
 
@@ -14,6 +15,8 @@ export const useEventStore = defineStore('event', () => {
   // ============ 删除撤销（单槽） ============
   // 最近一次被删除的事件；UI 层在 UNDO_DELETE_WINDOW_MS 内提供「撤销」入口。
   const recentlyDeleted = ref<LifeEvent | null>(null);
+  // 删除事件的配图延迟清理:等撤销窗口过后才真正删 Blob,撤销时取消
+  const imagePurgeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   // ============ 筛选状态（仅作用于时间线展示） ============
   const searchKeyword = ref('');
@@ -200,10 +203,21 @@ export const useEventStore = defineStore('event', () => {
     error.value = null;
     try {
       const target = events.value.find(e => e.id === id);
+      const imageIds = (await imageService.getByEvent(id)).map(i => i.id);
       await eventService.deleteEvent(id);
       mutationSeq++;
       events.value = events.value.filter(e => e.id !== id);
       if (target) recentlyDeleted.value = { ...target };
+      // 配图等撤销窗口结束后再清理,撤销则取消定时器
+      if (imageIds.length > 0) {
+        imagePurgeTimers.set(
+          id,
+          setTimeout(() => {
+            imagePurgeTimers.delete(id);
+            void imageService.deleteImages(imageIds).catch(() => {});
+          }, UNDO_DELETE_WINDOW_MS),
+        );
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '删除事件失败';
       throw err;
@@ -217,6 +231,11 @@ export const useEventStore = defineStore('event', () => {
     const deleted = recentlyDeleted.value;
     if (!deleted) return false;
     recentlyDeleted.value = null;
+    const purgeTimer = imagePurgeTimers.get(deleted.id);
+    if (purgeTimer) {
+      clearTimeout(purgeTimer);
+      imagePurgeTimers.delete(deleted.id);
+    }
     loading.value = true;
     error.value = null;
     try {
@@ -267,6 +286,8 @@ export const useEventStore = defineStore('event', () => {
     error.value = null;
     loading.value = false;
     recentlyDeleted.value = null;
+    for (const timer of imagePurgeTimers.values()) clearTimeout(timer);
+    imagePurgeTimers.clear();
   }
 
   return {

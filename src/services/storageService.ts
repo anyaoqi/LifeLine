@@ -1,10 +1,19 @@
 import Dexie, { type Table } from 'dexie';
 import type { UserProfile, LifeEvent } from '@/types';
 
+// 事件配图(v0.6.0):Blob 存 IndexedDB,与事件通过 eventId 关联
+export interface StoredImage {
+  id: string;
+  eventId: string;
+  blob: Blob;
+  createdAt: string;
+}
+
 // 定义数据库
 class LifePointDB extends Dexie {
   users!: Table<UserProfile>;
   events!: Table<LifeEvent>;
+  images!: Table<StoredImage>;
 
   constructor() {
     super('LifePointDB');
@@ -18,6 +27,13 @@ class LifePointDB extends Dexie {
       users: 'id',
       events: 'id, userId, date',
     });
+    // v4: 事件配图 Blob（v0.6.0 内容丰富包）。事件/用户结构不变。
+    this.version(4).stores({
+      users: 'id',
+      events: 'id, userId, date, importance, deletedAt',
+      images: 'id, eventId',
+    });
+
     // v3: 日期精度、重要程度、未结束区间和软删除。
     // upgrade 持久化默认值；normalizeEvent 则作为导入数据及异常中断升级的兜底。
     this.version(3).stores({

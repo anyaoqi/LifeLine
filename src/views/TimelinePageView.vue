@@ -4,6 +4,7 @@ import { Camera, Sparkles } from 'lucide-vue-next'
 import VirtualTimeline from '@/components/Timeline/VirtualTimeline.vue'
 import TimelineFilter from '@/components/Timeline/TimelineFilter.vue'
 import EventFormPanel from '@/components/event/EventFormPanel.vue'
+import EventDetail from '@/components/event/EventDetail.vue'
 import LifeTemplatePicker from '@/components/event/LifeTemplatePicker.vue'
 import EventDeleteConfirm from '@/components/EventForm/EventDeleteConfirm.vue'
 import AppModal from '@/components/common/AppModal.vue'
@@ -37,6 +38,25 @@ const yearSpan = computed(() => {
 // ============ 编辑弹窗(新增走全局) ============
 const editFormOpen = ref(false)
 const editingEvent = ref<LifeEvent | null>(null)
+
+// ============ 详情弹层 ============
+const detailOpen = ref(false)
+const detailEvent = ref<LifeEvent | null>(null)
+
+function onOpenDetail(event: LifeEvent) {
+  detailEvent.value = event
+  detailOpen.value = true
+}
+
+function onDetailEdit(event: LifeEvent) {
+  detailOpen.value = false
+  onEdit(event)
+}
+
+function onDetailDelete(event: LifeEvent) {
+  detailOpen.value = false
+  onDelete(event)
+}
 
 // ============ 人生模板选择器 ============
 const templatePickerOpen = ref(false)
@@ -177,8 +197,18 @@ async function handleExport() {
         @edit="onEdit"
         @delete="onDelete"
         @confirm="onConfirmDraft"
+        @open="onOpenDetail"
       />
     </div>
+
+    <!-- 事件详情弹层 -->
+    <EventDetail
+      :event="detailEvent"
+      :open="detailOpen"
+      @close="detailOpen = false"
+      @edit="onDetailEdit"
+      @delete="onDetailDelete"
+    />
 
     <!-- 人生模板选择器 -->
     <LifeTemplatePicker

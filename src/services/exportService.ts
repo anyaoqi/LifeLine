@@ -1,5 +1,7 @@
 import type { UserProfile, LifeEvent } from '@/types';
 import { userService, eventService, db, normalizeEvent } from './storageService';
+import type { StoredImage } from './storageService';
+import { imageService } from './imageService';
 import { toPng, toJpeg } from 'html-to-image';
 
 // ============ 导出数据结构 ============
@@ -8,9 +10,36 @@ export interface ExportData {
   exportedAt: string;         // 导出时间 ISO
   user: UserProfile | null;   // 用户档案
   events: LifeEvent[];        // 所有事件
+  images?: ExportImageEntry[]; // 配图(v2.1 起可选;旧版导出无此字段)
 }
 
-const EXPORT_VERSION = '2.0';
+const EXPORT_VERSION = '2.1';
+
+/** 导出中的配图:Blob 以 dataURL 内联,导入时还原 */
+export interface ExportImageEntry {
+  id: string;
+  eventId: string;
+  data: string;        // dataURL
+  createdAt: string;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, body] = dataUrl.split(',');
+  const mime = head.match(/data:(.*?);/)?.[1] ?? 'application/octet-stream';
+  const binary = atob(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
 
 // ============ 导出 ============
 
@@ -21,11 +50,30 @@ export async function exportUserData(userId: string): Promise<ExportData> {
   const user = (await userService.getUser(userId)) ?? null;
   const events = await eventService.getEventsByUser(userId);
 
+  // 配图以 dataURL 内联进 JSON,保证备份完整可迁移
+  let images: ExportImageEntry[] | undefined;
+  try {
+    const stored = await imageService.getByEvents(events.map(e => e.id));
+    if (stored.length > 0) {
+      images = await Promise.all(
+        stored.map(async (img: StoredImage) => ({
+          id: img.id,
+          eventId: img.eventId,
+          data: await blobToDataUrl(img.blob),
+          createdAt: img.createdAt,
+        })),
+      );
+    }
+  } catch {
+    images = undefined; // 配图读取失败不阻断主数据导出
+  }
+
   return {
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     user,
     events,
+    images,
   };
 }
 
@@ -103,12 +151,29 @@ export async function importUserData(
     // 导入事件
     if (data.events.length > 0) {
       if (replaceExisting && data.user) {
-        // 清空该用户的旧事件
+        // 清空该用户的旧事件及其配图
+        const oldIds = (await eventService.getEventsByUser(data.user.id)).map(e => e.id);
         await eventService.deleteEventsByUser(data.user.id);
+        for (const oldId of oldIds) {
+          await imageService.deleteByEvent(oldId);
+        }
       }
 
       // 批量写入新事件。v1.0 导出不含 v0.4.0 字段，也要套用同一默认值。
       await db.events.bulkPut(data.events.map(normalizeEvent));
+
+      // 恢复配图(v2.1+;1.0/2.0 导出无此字段)
+      if (data.images && data.images.length > 0) {
+        const restored = data.images
+          .filter(img => img.id && img.eventId && img.data)
+          .map(img => ({
+            id: img.id,
+            eventId: img.eventId,
+            blob: dataUrlToBlob(img.data),
+            createdAt: img.createdAt,
+          }));
+        if (restored.length > 0) await db.images.bulkPut(restored);
+      }
     }
 
     return {
